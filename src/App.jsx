@@ -395,8 +395,7 @@ function WorkoutScreen({ onExit, onComplete, settings, intensity: initIntensity,
   // Show effort confirmation before first hold of the session
   const showEffortPrompt = isIdle && exIdx === 0 && completedSets === 0 && !confirmedEffort;
 
-  const handleStart    = () => { setPhase("hold"); setTimeLeft(holdSecs); setIsRunning(true); };
-  const handlePause    = () => setIsRunning(r => !r);
+  function handleStart() { setPhase("hold"); setTimeLeft(holdSecs); setIsRunning(true); }
   const handlePause    = () => setIsRunning(r => !r);
   const handleResetSet = () => { clearInterval(timerRef.current); setIsRunning(false); setPhase("idle"); setTimeLeft(holdSecs); };
   const handleNextEx   = () => {
