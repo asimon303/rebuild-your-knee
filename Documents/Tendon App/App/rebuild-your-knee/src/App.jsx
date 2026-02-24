@@ -205,6 +205,9 @@ const Icon = ({ name, size = 20, color = "currentColor" }) => {
     warn:      <svg width={size} height={size} viewBox="0 0 24 24" {...s}><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>,
     star:      <svg width={size} height={size} viewBox="0 0 24 24" {...s}><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>,
     sun:       <svg width={size} height={size} viewBox="0 0 24 24" {...s}><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>,
+    bell:      <svg width={size} height={size} viewBox="0 0 24 24" {...s}><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>,
+    lock:      <svg width={size} height={size} viewBox="0 0 24 24" {...s}><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>,
+    exit:      <svg width={size} height={size} viewBox="0 0 24 24" {...s}><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>,
   };
   return map[name] || null;
 };
@@ -1160,29 +1163,53 @@ function TodayScreen({ painLog, setPainLog, sessionHistory, streak, onStartWorko
 // ── TRENDS SCREEN ─────────────────────────────────────────────────────────────
 function TrendsScreen({ painLog, sessionHistory, onExport }) {
   const c = useTheme();
-  const [tab, setTab] = useState("pain"); // pain | history
-  const weekDays = ["M","T","W","T","F","S","S"];
+  const [tab, setTab] = useState("pain");
 
-  const recentPain = painLog.slice(-7);
-  const avgPain    = recentPain.length ? (recentPain.reduce((a,b)=>a+b.value,0)/recentPain.length).toFixed(1) : "—";
-  const painData   = recentPain.map((p,i)=>({ value:p.value, label:weekDays[i%7], highlight:i===recentPain.length-1, restDay:p.restDay }));
-  const completionData = Array.from({length:7},(_,i)=>i<sessionHistory.length);
-  const intensityData  = sessionHistory.slice(-10).map(s=>s.intensity);
+  const recentPain   = painLog.slice(-14);
+  const last7Pain    = painLog.slice(-7);
+  const prev7Pain    = painLog.slice(-14, -7);
+  const avgPain      = last7Pain.length ? (last7Pain.reduce((a,b)=>a+b.value,0)/last7Pain.length).toFixed(1) : "—";
+  const prevAvgPain  = prev7Pain.length ? (prev7Pain.reduce((a,b)=>a+b.value,0)/prev7Pain.length).toFixed(1) : null;
+  const painDelta    = prevAvgPain ? (parseFloat(avgPain) - parseFloat(prevAvgPain)).toFixed(1) : null;
 
-  // Pain insights
-  const trainDays = sessionHistory.slice(-7).map(s=>s.date);
-  const trainPain = painLog.filter(p=>trainDays.includes(p.date)).map(p=>p.value);
-  const restPain  = painLog.filter(p=>!trainDays.includes(p.date)&&!p.restDay).map(p=>p.value);
-  const trainAvg  = trainPain.length ? (trainPain.reduce((a,b)=>a+b,0)/trainPain.length).toFixed(1) : null;
-  const restAvg   = restPain.length  ? (restPain.reduce((a,b)=>a+b,0)/restPain.length).toFixed(1)  : null;
+  // Consistency = % of last 30 days with session or rest log
+  const todayMs = Date.now();
+  const activeDates = new Set([...sessionHistory.map(s=>s.date), ...painLog.map(p=>p.date)]);
+  let activeDays = 0;
+  for (let i = 0; i < 30; i++) {
+    const d = new Date(todayMs - i * 86400000);
+    const lbl = d.toLocaleDateString("en-GB",{day:"2-digit",month:"short",year:"numeric"});
+    if (activeDates.has(lbl)) activeDays++;
+  }
+  const consistency = Math.round((activeDays / 30) * 100);
+  const prevConsistency = Math.max(0, consistency - 5); // approx trend
+  const consistencyDelta = consistency - prevConsistency;
+
+  // Monthly calendar
+  const now = new Date();
+  const year = now.getFullYear(), month = now.getMonth();
+  const firstDay = new Date(year, month, 1).getDay(); // 0=Sun
+  const daysInMonth = new Date(year, month+1, 0).getDate();
+  const monthName = now.toLocaleString("en-GB", { month:"long", year:"numeric" }).toUpperCase();
+  const sessionDates = new Set(sessionHistory.map(s=>s.date));
+  const restDates    = new Set(painLog.filter(p=>p.restDay).map(p=>p.date));
+
+  const trainDays  = sessionHistory.slice(-14).map(s=>s.date);
+  const trainPain  = painLog.filter(p=>trainDays.includes(p.date)).map(p=>p.value);
+  const restPain   = painLog.filter(p=>!trainDays.includes(p.date)&&!p.restDay).map(p=>p.value);
+  const trainAvg   = trainPain.length ? (trainPain.reduce((a,b)=>a+b,0)/trainPain.length).toFixed(1) : null;
+  const restAvg    = restPain.length  ? (restPain.reduce((a,b)=>a+b,0)/restPain.length).toFixed(1)  : null;
+  const intensityData = sessionHistory.slice(-10).map(s=>s.intensity);
 
   return (
     <div className="scroll-area fade-in" style={{ padding:"0 16px 100px" }}>
+      <div style={{ fontSize:24, fontWeight:900, fontFamily:"'Outfit',sans-serif", marginBottom:4, letterSpacing:-0.5 }}>Recovery Trends</div>
+      <div style={{ fontSize:12, color:c.textSecondary, marginBottom:16 }}>Monitoring morning baseline</div>
 
       {/* Tab toggle */}
-      <div style={{ display:"flex", background:c.card, border:`1px solid ${c.surfaceBorder}`, borderRadius:12, padding:3, marginBottom:14 }}>
+      <div style={{ display:"flex", background:c.surfaceAlt, borderRadius:12, padding:3, marginBottom:16, border:`1px solid ${c.cardBorder}` }}>
         {[{id:"pain",label:"Pain & Progress"},{id:"history",label:"Session History"}].map(t=>(
-          <button key={t.id} onClick={()=>setTab(t.id)} style={{ flex:1, padding:"9px", borderRadius:9, border:"none", background:tab===t.id?c.cardBorder:"transparent", color:tab===t.id?c.textPrimary:c.textSecondary, fontSize:13, fontWeight:600, cursor:"pointer", transition:"all 0.2s" }}>
+          <button key={t.id} onClick={()=>setTab(t.id)} style={{ flex:1, padding:"9px", borderRadius:9, border:"none", background:tab===t.id?c.card:"transparent", color:tab===t.id?c.textPrimary:c.textSecondary, fontSize:13, fontWeight:600, cursor:"pointer", transition:"all 0.2s", boxShadow:tab===t.id?`0 1px 4px rgba(0,0,0,0.15)`:"none" }}>
             {t.label}
           </button>
         ))}
@@ -1190,27 +1217,70 @@ function TrendsScreen({ painLog, sessionHistory, onExport }) {
 
       {tab === "pain" && (
         <>
-          <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:10, marginBottom:12 }}>
-            {[{ label:"AVG PAIN", value:avgPain, unit:"/10", color:parseFloat(avgPain)<=3?c.green:c.yellow },
-              { label:"SESSIONS", value:sessionHistory.length, unit:"total", color:c.blue },
-              { label:"THIS WEEK", value:Math.min(sessionHistory.length,7), unit:"/7", color:c.green }].map((s,i)=>(
-              <div key={i} className="card" style={{ margin:0, textAlign:"center", padding:"13px 8px" }}>
-                <div style={{ fontSize:9, color:c.textSecondary, fontWeight:600, letterSpacing:1.5, marginBottom:5 }}>{s.label}</div>
-                <div className="mono" style={{ fontSize:22, fontWeight:700, fontFamily:"'Outfit',sans-serif", color:s.color }}>{s.value}</div>
-                <div style={{ fontSize:10, color:c.textMuted, marginTop:1 }}>{s.unit}</div>
+          {/* Stats row */}
+          <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10, marginBottom:12 }}>
+            <div className="card" style={{ margin:0, padding:"16px" }}>
+              <div style={{ fontSize:9, color:c.textSecondary, fontWeight:700, fontFamily:"'Outfit',sans-serif", letterSpacing:1.5, marginBottom:6 }}>AVG PAIN</div>
+              <div style={{ display:"flex", alignItems:"baseline", gap:8 }}>
+                <span className="mono" style={{ fontSize:32, fontWeight:800, fontFamily:"'Outfit',sans-serif", color:parseFloat(avgPain)<=3?c.green:parseFloat(avgPain)<=6?c.yellow:c.red, lineHeight:1 }}>{avgPain}</span>
+                {painDelta !== null && (
+                  <span style={{ fontSize:13, fontWeight:700, color:parseFloat(painDelta)<0?c.green:c.red }}>{parseFloat(painDelta)>0?"+":""}{painDelta}</span>
+                )}
               </div>
-            ))}
+              <div style={{ fontSize:10, color:c.textMuted, marginTop:2 }}>out of 10</div>
+            </div>
+            <div className="card" style={{ margin:0, padding:"16px" }}>
+              <div style={{ fontSize:9, color:c.textSecondary, fontWeight:700, fontFamily:"'Outfit',sans-serif", letterSpacing:1.5, marginBottom:6 }}>CONSISTENCY</div>
+              <div style={{ display:"flex", alignItems:"baseline", gap:8 }}>
+                <span className="mono" style={{ fontSize:32, fontWeight:800, fontFamily:"'Outfit',sans-serif", color:consistency>=70?c.green:consistency>=40?c.yellow:c.red, lineHeight:1 }}>{consistency}%</span>
+                {consistencyDelta > 0 && <span style={{ fontSize:13, fontWeight:700, color:c.green }}>+{consistencyDelta}%</span>}
+              </div>
+              <div style={{ fontSize:10, color:c.textMuted, marginTop:2 }}>30-day activity</div>
+            </div>
           </div>
 
+          {/* 14-day sparkline */}
           <div className="card">
             <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", marginBottom:16 }}>
-              <div><div style={{ fontSize:16, fontWeight:700, fontFamily:"'Outfit',sans-serif" }}>Pain Level</div><div style={{ fontSize:12, color:c.textSecondary, marginTop:2 }}>7-day morning baseline</div></div>
-              <span style={{ fontSize:11, color:c.green, fontWeight:600 }}>↓ trending</span>
+              <div>
+                <div style={{ fontSize:16, fontWeight:700, fontFamily:"'Outfit',sans-serif" }}>Morning Baseline Pain</div>
+                <div style={{ fontSize:12, color:c.textSecondary, marginTop:2 }}>Last 14 Days</div>
+              </div>
+              {painDelta !== null && (
+                <span style={{ fontSize:12, fontWeight:700, color:parseFloat(painDelta)<0?c.green:c.red, background:(parseFloat(painDelta)<0?c.green:c.red)+"15", padding:"4px 10px", borderRadius:20 }}>
+                  {parseFloat(painDelta)<0?"↓":"↑"} {Math.abs(painDelta)*10}%
+                </span>
+              )}
             </div>
-            <BarChart data={painData.length ? painData : [{value:0,label:"—",highlight:false}]} color={c.green} />
+            {recentPain.length >= 2 ? (
+              <>
+                <Sparkline data={recentPain.map(p=>p.value)} color={c.green} height={80} />
+                <div style={{ display:"flex", justifyContent:"space-between", marginTop:8, fontSize:10, color:c.textMuted }}>
+                  <span>14 days ago</span><span>Today</span>
+                </div>
+              </>
+            ) : (
+              <div style={{ textAlign:"center", color:c.textSecondary, padding:"20px 0", fontSize:13 }}>Log at least 2 check-ins to see your trend.</div>
+            )}
           </div>
 
-          {/* Training vs rest day pain */}
+          {/* Stats pills */}
+          <div className="card">
+            <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10 }}>
+              <div style={{ background:c.surfaceAlt, borderRadius:12, padding:"14px", textAlign:"center" }}>
+                <div style={{ fontSize:9, color:c.textSecondary, fontWeight:700, fontFamily:"'Outfit',sans-serif", letterSpacing:1.5, marginBottom:6 }}>SESSIONS</div>
+                <div className="mono" style={{ fontSize:28, fontWeight:800, fontFamily:"'Outfit',sans-serif", color:c.blue }}>{sessionHistory.length}</div>
+                <div style={{ fontSize:10, color:c.textMuted }}>total</div>
+              </div>
+              <div style={{ background:c.surfaceAlt, borderRadius:12, padding:"14px", textAlign:"center" }}>
+                <div style={{ fontSize:9, color:c.textSecondary, fontWeight:700, fontFamily:"'Outfit',sans-serif", letterSpacing:1.5, marginBottom:6 }}>COLLAGEN DAYS</div>
+                <div className="mono" style={{ fontSize:28, fontWeight:800, fontFamily:"'Outfit',sans-serif", color:c.green }}>{painLog.length}</div>
+                <div style={{ fontSize:10, color:c.textMuted }}>logged</div>
+              </div>
+            </div>
+          </div>
+
+          {/* Training vs rest pain */}
           {trainAvg && restAvg && (
             <div className="card">
               <div style={{ fontSize:16, fontWeight:700, fontFamily:"'Outfit',sans-serif", marginBottom:4 }}>Training vs Rest Day Pain</div>
@@ -1226,14 +1296,13 @@ function TrendsScreen({ painLog, sessionHistory, onExport }) {
               </div>
               {parseFloat(trainAvg)<parseFloat(restAvg) && (
                 <div style={{ marginTop:12, fontSize:12, color:c.green, fontWeight:500, display:"flex", alignItems:"center", gap:6 }}>
-                  <Icon name="bolt" size={13} color={c.green} />
-                  Training days show lower pain — keep loading!
+                  <Icon name="bolt" size={13} color={c.green} />Training days show lower pain — keep loading!
                 </div>
               )}
             </div>
           )}
 
-          {/* Intensity trend */}
+          {/* Intensity sparkline */}
           {intensityData.length > 1 && (
             <div className="card">
               <div style={{ fontSize:16, fontWeight:700, fontFamily:"'Outfit',sans-serif", marginBottom:2 }}>Intensity Progression</div>
@@ -1241,56 +1310,50 @@ function TrendsScreen({ painLog, sessionHistory, onExport }) {
               <Sparkline data={intensityData} color={c.blue} />
               <div style={{ display:"flex", justifyContent:"space-between", marginTop:10, fontSize:10, color:c.textSecondary, fontWeight:500 }}>
                 <span>EARLIEST</span>
-                <span style={{ color:c.blue }}>
-                  {intensityData[intensityData.length-1] > intensityData[0] ? `+${intensityData[intensityData.length-1]-intensityData[0]}% increase` : "stable"}
-                </span>
+                <span style={{ color:c.blue }}>{intensityData[intensityData.length-1] > intensityData[0] ? `+${intensityData[intensityData.length-1]-intensityData[0]}% increase` : "stable"}</span>
                 <span>LATEST</span>
               </div>
             </div>
           )}
 
+          {/* Monthly calendar */}
           <div className="card">
-            <div style={{ fontSize:16, fontWeight:700, fontFamily:"'Outfit',sans-serif", marginBottom:2 }}>Weekly Completion</div>
-            <div style={{ fontSize:12, color:c.textSecondary, marginBottom:16 }}>Sessions this week</div>
-            <div style={{ display:"flex", gap:8 }}>
-              {weekDays.map((d,i)=>(
-                <div key={i} style={{ flex:1, display:"flex", flexDirection:"column", alignItems:"center", gap:6 }}>
-                  <div style={{ width:"100%", aspectRatio:"1", borderRadius:8, background:completionData[i]?c.green+"18":c.badgeBg, border:`1px solid ${completionData[i]?c.green+"44":"#222"}`, display:"flex", alignItems:"center", justifyContent:"center" }}>
-                    {completionData[i] && <Icon name="check" size={13} color={c.green} />}
+            <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:16 }}>
+              <div style={{ fontSize:16, fontWeight:700, fontFamily:"'Outfit',sans-serif" }}>Monthly Outlook</div>
+              <span style={{ fontSize:11, fontWeight:700, fontFamily:"'Outfit',sans-serif", color:c.green, letterSpacing:1 }}>{monthName}</span>
+            </div>
+            <div style={{ display:"grid", gridTemplateColumns:"repeat(7,1fr)", gap:4, marginBottom:8 }}>
+              {["M","T","W","T","F","S","S"].map((d,i)=>(
+                <div key={i} style={{ textAlign:"center", fontSize:9, fontWeight:700, color:c.textMuted, paddingBottom:4 }}>{d}</div>
+              ))}
+              {/* Offset for first day — convert Sun=0 to Mon=0 */}
+              {Array.from({ length: (firstDay + 6) % 7 }).map((_,i)=>(
+                <div key={`empty-${i}`} />
+              ))}
+              {Array.from({ length: daysInMonth }).map((_,i)=>{
+                const day = i + 1;
+                const d = new Date(year, month, day);
+                const lbl = d.toLocaleDateString("en-GB",{day:"2-digit",month:"short",year:"numeric"});
+                const isToday = day === now.getDate();
+                const isSession = sessionDates.has(lbl);
+                const isRest    = restDates.has(lbl) && !isSession;
+                return (
+                  <div key={day} style={{ aspectRatio:"1", borderRadius:8, display:"flex", alignItems:"center", justifyContent:"center", background: isSession ? c.green : isRest ? c.purple+"33" : "transparent", border: isToday ? `1.5px solid ${c.green}` : "1px solid transparent", position:"relative" }}>
+                    <span style={{ fontSize:10, fontWeight: isToday||isSession ? 700 : 400, color: isSession ? "#000" : isToday ? c.green : c.textSecondary }}>{day}</span>
                   </div>
-                  <span style={{ fontSize:9, color:c.textSecondary, fontWeight:500 }}>{d}</span>
+                );
+              })}
+            </div>
+            <div style={{ display:"flex", gap:16, marginTop:8 }}>
+              {[{color:c.green,label:"Workout"},{color:c.purple+"99",label:"Rest"}].map((l,i)=>(
+                <div key={i} style={{ display:"flex", alignItems:"center", gap:6 }}>
+                  <div style={{ width:10, height:10, borderRadius:3, background:l.color }} />
+                  <span style={{ fontSize:10, color:c.textSecondary }}>{l.label}</span>
                 </div>
               ))}
             </div>
           </div>
 
-          {/* Pain log */}
-          <div className="card">
-            <div style={{ fontSize:16, fontWeight:700, fontFamily:"'Outfit',sans-serif", marginBottom:2 }}>Pain Log</div>
-            <div style={{ fontSize:12, color:c.textSecondary, marginBottom:14 }}>All recorded check-ins</div>
-            {painLog.length===0 ? (
-              <div style={{ textAlign:"center", color:c.textSecondary, padding:"20px 0", fontSize:13 }}>No check-ins yet.</div>
-            ) : (
-              painLog.slice(-10).reverse().map((p,i)=>{
-                const c=p.restDay?c.purple:p.value<=3?c.green:p.value<=6?c.yellow:c.red;
-                return (
-                  <div key={i} style={{ display:"flex", alignItems:"center", justifyContent:"space-between", padding:"9px 0", borderBottom:i<Math.min(9,painLog.length-1)?`1px solid ${c.cardBorder}`:"none" }}>
-                    <div style={{ display:"flex", alignItems:"center", gap:10 }}>
-                      <div style={{ width:7, height:7, borderRadius:"50%", background:c, flexShrink:0 }} />
-                      <span style={{ fontSize:13, color:c.textSecondary }}>{p.date || `Check-in ${painLog.length-i}`}</span>
-                      {p.restDay && <span style={{ fontSize:10, color:c.purple, fontWeight:600, background:c.purple+"15", padding:"2px 7px", borderRadius:10 }}>REST</span>}
-                    </div>
-                    <div style={{ display:"flex", alignItems:"center", gap:8 }}>
-                      {!p.restDay && <span style={{ fontSize:11, color:c, fontWeight:600 }}>{p.label}</span>}
-                      {!p.restDay && <span className="mono" style={{ fontSize:18, fontWeight:700, fontFamily:"'Outfit',sans-serif", color:c }}>{p.value}</span>}
-                    </div>
-                  </div>
-                );
-              })
-            )}
-          </div>
-
-          {/* Export */}
           <button onClick={onExport} style={{ width:"100%", background:c.card, border:`1px solid ${c.surfaceBorder}`, borderRadius:14, padding:"14px", fontSize:13, fontWeight:600, color:c.textSecondary, cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center", gap:8, marginBottom:8 }}>
             <Icon name="download" size={16} color={c.textSecondary} />
             Export Data as CSV
@@ -1338,192 +1401,287 @@ function TrendsScreen({ painLog, sessionHistory, onExport }) {
 function ProtocolsScreen({ stage, weeksInStage, avgPain, onAdvanceStage }) {
   const c = useTheme();
   const [active, setActive] = useState(null);
+
+  const stageOrder = ["A","B","C","M"];
+  const currentIdx = stageOrder.indexOf(stage);
+
   const protocols = [
-    { id:0, stage:"A", title:"Foundation Protocol", subtitle:"Weeks 1–4 · Isometric Loading", color:c.green, description:"Build base tendon tolerance with sustained isometric holds. Focus on pain-free loading and neuromuscular activation.", exercises:[{name:"Wall Squats",sets:4,reps:"45s hold",rest:"60s",intensity:"70% MVC"},{name:"Calf Raises",sets:4,reps:"45s hold",rest:"60s",intensity:"70% MVC"},{name:"Leg Press Hold",sets:4,reps:"45s hold",rest:"60s",intensity:"65% MVC"},{name:"Spanish Squat",sets:4,reps:"45s hold",rest:"60s",intensity:"70% MVC"},{name:"Eccentric Heel Drops",sets:4,reps:"45s hold",rest:"60s",intensity:"Bodyweight"}] },
-    { id:1, stage:"B", title:"Strength Phase", subtitle:"Weeks 5–8 · Isotonic Loading", color:c.blue, description:"Introduce slow eccentric-concentric movements to build tendon stiffness and cross-sectional area.", exercises:[{name:"Decline Squat (Slow)",sets:4,reps:"8 reps",rest:"3 min",intensity:"3-0-3 tempo"},{name:"Step-Down (Eccentric)",sets:3,reps:"10 reps",rest:"2 min",intensity:"Bodyweight"},{name:"Leg Press (Single)",sets:3,reps:"12 reps",rest:"2 min",intensity:"Moderate"}] },
-    { id:2, stage:"C", title:"Power & Plyometrics", subtitle:"Weeks 9–12 · Energy Storage", color:c.orange, description:"Develop energy storage capacity through progressive loading and reactive drills.", exercises:[{name:"Depth Jump (Low)",sets:3,reps:"6 reps",rest:"3 min",intensity:"Min. height"},{name:"Split Squat Jump",sets:3,reps:"8 reps",rest:"3 min",intensity:"Bodyweight"},{name:"Single-Leg Hop",sets:4,reps:"10m",rest:"3 min",intensity:"Controlled"}] },
-    { id:3, stage:"M", title:"Maintenance", subtitle:"Ongoing · Tendon Health", color:c.purple, description:"Sustain tendon health with 2–3× weekly loading. Prevent deconditioning and maintain tissue quality.", exercises:[{name:"Wall Squats",sets:3,reps:"45s hold",rest:"60s",intensity:"80% MVC"},{name:"Decline Squat",sets:3,reps:"10 reps",rest:"2 min",intensity:"Moderate"},{name:"Calf Raise (Single)",sets:3,reps:"15 reps",rest:"90s",intensity:"Slow"}] },
+    { id:0, stage:"A", title:"Phase 1: Isometrics",          weeks:"Weeks 1–6",  goal:"Tendon Stress Relaxation",    color:c.green,  description:"Build base tendon tolerance with sustained isometric holds at 70% MVC. Focus on pain management and neuromuscular activation.", exercises:[{name:"Wall Squats",sets:4,reps:"45s hold",rest:"60s",intensity:"70% MVC"},{name:"Spanish Squat",sets:4,reps:"45s hold",rest:"60s",intensity:"70% MVC"},{name:"Leg Extensions",sets:4,reps:"45s hold",rest:"60s",intensity:"65% MVC"},{name:"Quad Sets",sets:3,reps:"5s × 10",rest:"30s",intensity:"Bodyweight"},{name:"Calf Raises",sets:4,reps:"45s hold",rest:"60s",intensity:"70% MVC"}] },
+    { id:1, stage:"B", title:"Phase 2: Heavy Slow Resistance",weeks:"Weeks 5–12", goal:"Hypertrophy & Remodelling",    color:c.blue,   description:"Introduce slow eccentric-concentric movements at 3-0-3 tempo to build tendon stiffness and cross-sectional area.", exercises:[{name:"Bulgarian Split Squat",sets:4,reps:"8 reps",rest:"3 min",intensity:"3-0-3 tempo"},{name:"Eccentric Heel Drops",sets:3,reps:"10 reps",rest:"2 min",intensity:"Slow"},{name:"Leg Press (Single)",sets:3,reps:"12 reps",rest:"2 min",intensity:"Moderate"},{name:"Spanish Squat",sets:4,reps:"45s hold",rest:"60s",intensity:"75% MVC"}] },
+    { id:2, stage:"C", title:"Phase 3: Plyometrics",          weeks:"Weeks 13+",  goal:"Energy Storage Capacity",     color:c.orange, description:"Develop tendon energy storage through progressive plyometric loading and reactive drills.", exercises:[{name:"Depth Jump (Low)",sets:3,reps:"6 reps",rest:"3 min",intensity:"Min. height"},{name:"Split Squat Jump",sets:3,reps:"8 reps",rest:"3 min",intensity:"Bodyweight"},{name:"Single-Leg Hop",sets:4,reps:"10m",rest:"3 min",intensity:"Controlled"},{name:"Box Jump",sets:3,reps:"5 reps",rest:"3 min",intensity:"Low box"}] },
+    { id:3, stage:"M", title:"Maintenance",                   weeks:"Ongoing",    goal:"Tendon Health & Bulletproofing",color:c.purple, description:"Sustain tendon health with 2–3× weekly loading. Prevent deconditioning and maintain tissue quality long-term.", exercises:[{name:"Wall Squats",sets:3,reps:"45s hold",rest:"60s",intensity:"80% MVC"},{name:"Bulgarian Split Squat",sets:3,reps:"10 reps",rest:"2 min",intensity:"Progressive"},{name:"Calf Raise (Single)",sets:3,reps:"15 reps",rest:"90s",intensity:"Slow"},{name:"Spanish Squat",sets:3,reps:"45s hold",rest:"60s",intensity:"Max load"}] },
   ];
 
   const criteria = STAGE_CRITERIA[stage];
   const readyToProgress = criteria?.nextStage && weeksInStage >= criteria.minWeeks && avgPain <= criteria.maxAvgPain;
 
   return (
-    <div className="scroll-area fade-in" style={{ padding:"0 16px 100px" }}>
-      <p style={{ fontSize:13, color:c.textSecondary, lineHeight:1.7, marginBottom:14 }}>Evidence-based tendon loading protocols. Progress through stages as pain decreases and strength improves.</p>
+    <div className="scroll-area fade-in" style={{ padding:"0 0 100px" }}>
 
-      {/* Stage progression gate */}
-      {readyToProgress && (
-        <div className="slide-up" style={{ background:c.green+"11", border:`1px solid ${c.green}44`, borderRadius:16, padding:"16px 18px", marginBottom:14 }}>
-          <div style={{ fontSize:13, fontWeight:700, fontFamily:"'Outfit',sans-serif", color:c.green, marginBottom:4 }}>Ready to advance to Stage {criteria.nextStage}?</div>
-          <div style={{ fontSize:12, color:c.textSecondary, marginBottom:14, lineHeight:1.5 }}>You've completed {weeksInStage} weeks in Stage {stage} with an avg pain of {avgPain}/10 — criteria met!</div>
-          <button onClick={()=>onAdvanceStage(criteria.nextStage)} style={{ background:c.green, color:"#000", border:"none", borderRadius:10, padding:"10px 20px", fontSize:13, fontWeight:700, fontFamily:"'Outfit',sans-serif", cursor:"pointer" }}>
-            Advance to Stage {criteria.nextStage}
-          </button>
-        </div>
-      )}
+      {/* Hero banner */}
+      <div style={{ margin:"0 0 20px", background:"linear-gradient(135deg,#1a0800 0%,#2d1200 100%)", padding:"28px 20px 24px", borderBottom:`1px solid ${c.cardBorder}` }}>
+        <div style={{ fontSize:9, fontWeight:700, fontFamily:"'Outfit',sans-serif", letterSpacing:3, color:c.orange, marginBottom:6 }}>SCIENTIFIC MASTERCLASS</div>
+        <div style={{ fontSize:24, fontWeight:900, fontFamily:"'Outfit',sans-serif", color:c.orange, marginBottom:8, letterSpacing:-0.5 }}>The Baar Protocol</div>
+        <div style={{ fontSize:13, color:"#c9b08a", lineHeight:1.6, marginBottom:16 }}>15g Collagen + Vitamin C timing. Consume 60 minutes prior to exercise for optimal tendon synthesis.</div>
+        <a href="https://pubmed.ncbi.nlm.nih.gov/28253282/" target="_blank" rel="noopener noreferrer" style={{ display:"inline-flex", alignItems:"center", gap:8, background:c.orange, color:"#000", border:"none", borderRadius:50, padding:"12px 24px", fontSize:13, fontWeight:800, fontFamily:"'Outfit',sans-serif", cursor:"pointer", textDecoration:"none", letterSpacing:0.3 }}>
+          READ SCIENCE ↗
+        </a>
+      </div>
 
-      {protocols.map(p=>(
-        <div key={p.id} className="card" onClick={()=>setActive(active===p.id?null:p.id)} style={{ cursor:"pointer", border:`1px solid ${active===p.id?p.color+"44":stage===p.stage?p.color+"22":c.cardBorder}`, transition:"border-color 0.2s" }}>
-          <div style={{ display:"flex", alignItems:"center", gap:14 }}>
-            <div style={{ width:44, height:44, borderRadius:12, background:p.color+"12", border:`1px solid ${p.color}28`, display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0 }}>
-              <span style={{ fontSize:20, fontWeight:800, fontFamily:"'Outfit',sans-serif", color:p.color }}>{p.stage}</span>
-            </div>
-            <div style={{ flex:1 }}>
-              <div style={{ fontSize:15, fontWeight:700, fontFamily:"'Outfit',sans-serif" }}>{p.title}</div>
-              <div style={{ fontSize:12, color:c.textSecondary, marginTop:2 }}>{p.subtitle}</div>
-            </div>
-            {stage===p.stage && <span style={{ fontSize:9, fontWeight:700, fontFamily:"'Outfit',sans-serif", color:p.color, background:p.color+"15", padding:"3px 8px", borderRadius:10, letterSpacing:1 }}>ACTIVE</span>}
-            <div style={{ transform:active===p.id?"rotate(180deg)":"none", transition:"transform 0.2s" }}><Icon name="chevron" size={17} color={c.textSecondary} /></div>
+      <div style={{ padding:"0 16px" }}>
+        {/* Stage advancement banner */}
+        {readyToProgress && (
+          <div className="slide-up" style={{ background:c.green+"11", border:`1px solid ${c.green}44`, borderRadius:16, padding:"16px 18px", marginBottom:16 }}>
+            <div style={{ fontSize:13, fontWeight:700, fontFamily:"'Outfit',sans-serif", color:c.green, marginBottom:4 }}>Ready to advance to Phase {stageOrder.indexOf(criteria.nextStage)+1}?</div>
+            <div style={{ fontSize:12, color:c.textSecondary, marginBottom:14, lineHeight:1.5 }}>You've completed {weeksInStage} weeks in Stage {stage} with avg pain {avgPain}/10 — criteria met!</div>
+            <button onClick={()=>onAdvanceStage(criteria.nextStage)} style={{ background:c.green, color:"#000", border:"none", borderRadius:10, padding:"10px 20px", fontSize:13, fontWeight:700, fontFamily:"'Outfit',sans-serif", cursor:"pointer" }}>
+              Advance to Stage {criteria.nextStage}
+            </button>
           </div>
-          {active===p.id && (
-            <div className="fade-in-fast" style={{ marginTop:16, borderTop:`1px solid ${c.cardBorder}`, paddingTop:16 }}>
-              <p style={{ fontSize:13, color:c.textSecondary, lineHeight:1.65, marginBottom:14 }}>{p.description}</p>
-              {p.exercises.map((ex,i)=>(
-                <div key={i} style={{ background:c.surfaceAlt, borderRadius:10, padding:"12px 14px", marginBottom:8 }}>
-                  <div style={{ fontWeight:600, fontSize:14, marginBottom:10 }}>{ex.name}</div>
-                  <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:8 }}>
-                    {[["Sets",ex.sets],["Reps/Time",ex.reps],["Rest",ex.rest],["Intensity",ex.intensity]].map(([k,v])=>(
-                      <div key={k}><div style={{ fontSize:9, color:c.textSecondary, fontWeight:600, letterSpacing:1.5, marginBottom:2 }}>{k}</div><div style={{ fontSize:13, fontWeight:600, color:p.color }}>{v}</div></div>
-                    ))}
-                  </div>
+        )}
+
+        <div style={{ fontSize:9, fontWeight:700, fontFamily:"'Outfit',sans-serif", letterSpacing:3, color:c.textSecondary, marginBottom:12 }}>REHABILITATION PHASES · FOLLOW THE PRESCRIBED LOADING PROGRESSION</div>
+
+        {protocols.map((p, idx) => {
+          const isActive   = stage === p.stage;
+          const isPast     = currentIdx > idx;
+          const isFuture   = currentIdx < idx;
+          const isExpanded = active === p.id;
+          const progressPct = isActive ? Math.min(100, Math.round((weeksInStage / 6) * 100)) : isPast ? 100 : 0;
+
+          return (
+            <div key={p.id} className="card" style={{ marginBottom:10, cursor: isFuture ? "default" : "pointer", border:`1px solid ${isExpanded ? p.color+"55" : isActive ? p.color+"33" : c.cardBorder}`, opacity: isFuture ? 0.55 : 1, transition:"all 0.2s" }}
+              onClick={()=>{ if (!isFuture) setActive(isExpanded ? null : p.id); }}>
+              <div style={{ display:"flex", alignItems:"center", gap:12 }}>
+                {/* Icon */}
+                <div style={{ width:44, height:44, borderRadius:12, background: isPast ? p.color+"22" : isActive ? p.color+"18" : c.badgeBg, border:`1px solid ${isActive||isPast ? p.color+"44" : c.cardBorder}`, display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0 }}>
+                  {isPast
+                    ? <Icon name="check" size={20} color={p.color} />
+                    : isFuture
+                      ? <Icon name="lock" size={17} color={c.textMuted} />
+                      : <Icon name="bolt" size={20} color={p.color} />
+                  }
                 </div>
-              ))}
+                <div style={{ flex:1, minWidth:0 }}>
+                  <div style={{ fontSize:15, fontWeight:700, fontFamily:"'Outfit',sans-serif" }}>{p.title}</div>
+                  <div style={{ fontSize:11, color:c.textSecondary, marginTop:1 }}>{p.weeks} · Goal: {p.goal}</div>
+                  {/* Progress bar for active stage */}
+                  {isActive && (
+                    <div style={{ marginTop:8 }}>
+                      <div style={{ height:4, background:c.badgeBg, borderRadius:2, overflow:"hidden" }}>
+                        <div style={{ height:"100%", width:`${progressPct}%`, background:p.color, borderRadius:2, transition:"width 0.6s ease" }} />
+                      </div>
+                      <div style={{ fontSize:9, color:p.color, fontWeight:600, marginTop:3 }}>{progressPct}% complete</div>
+                    </div>
+                  )}
+                </div>
+                {isActive && <span style={{ fontSize:9, fontWeight:700, fontFamily:"'Outfit',sans-serif", color:p.color, background:p.color+"18", padding:"3px 8px", borderRadius:10, letterSpacing:1, flexShrink:0 }}>ACTIVE</span>}
+                {isFuture && <span style={{ fontSize:9, fontWeight:700, fontFamily:"'Outfit',sans-serif", color:c.textMuted, background:c.badgeBg, padding:"3px 8px", borderRadius:10, letterSpacing:1, flexShrink:0 }}>LOCKED</span>}
+                {!isFuture && <div style={{ transform:isExpanded?"rotate(180deg)":"none", transition:"transform 0.2s", flexShrink:0 }}><Icon name="chevron" size={17} color={c.textSecondary} /></div>}
+              </div>
+
+              {isExpanded && (
+                <div className="fade-in-fast" style={{ marginTop:16, borderTop:`1px solid ${c.cardBorder}`, paddingTop:16 }}>
+                  <p style={{ fontSize:13, color:c.textSecondary, lineHeight:1.65, marginBottom:14 }}>{p.description}</p>
+                  {p.exercises.map((ex,i)=>(
+                    <div key={i} style={{ background:c.surfaceAlt, borderRadius:10, padding:"12px 14px", marginBottom:8 }}>
+                      <div style={{ fontWeight:700, fontSize:14, marginBottom:8 }}>{ex.name}</div>
+                      <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:8 }}>
+                        {[["Sets",ex.sets],["Reps/Time",ex.reps],["Rest",ex.rest],["Intensity",ex.intensity]].map(([k,v])=>(
+                          <div key={k}>
+                            <div style={{ fontSize:9, color:c.textSecondary, fontWeight:600, letterSpacing:1.5, marginBottom:2 }}>{k}</div>
+                            <div style={{ fontSize:13, fontWeight:600, color:p.color }}>{v}</div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
-          )}
-        </div>
-      ))}
+          );
+        })}
+      </div>
     </div>
   );
 }
 
 // ── PROFILE / SETTINGS SCREEN ─────────────────────────────────────────────────
-function ProfileScreen({ stage, weeksInStage, setStage, setWeeksInStage, settings, setSettings, sessionHistory }) {
+function ProfileScreen({ stage, weeksInStage, setStage, setWeeksInStage, settings, setSettings, sessionHistory, painLog, streak, isDark, setIsDark }) {
   const c = useTheme();
-  const [name, setName]     = useState("Alex Carter");
-  const [editing, setEditing] = useState(false);
-  const [notifs, setNotifs] = useState(true);
-  const [morning, setMorning] = useState(true);
-  const [settingsOpen, setSettingsOpen] = useState(false);
-  const [localSettings, setLocalSettings] = useState(settings);
+  const [settingsOpen, setSettingsOpen]     = useState(null); // "workout" | "notifications" | "medical" | "equipment"
+  const [localSettings, setLocalSettings]   = useState(settings);
+  const [notifs, setNotifs]                 = useState(true);
+  const [morning, setMorning]               = useState(true);
 
-  const achievements = [
-    { icon:"bolt",   label:"14-Day Streak",  earned:true,  color:c.green },
-    { icon:"trophy", label:"First Protocol", earned:true,  color:c.yellow },
-    { icon:"fire",   label:"30-Day Warrior", earned:sessionHistory.length>=30, color:c.orange },
-    { icon:"knee",   label:"Pain-Free Week", earned:false, color:c.blue },
-    { icon:"star",   label:"10 Sessions",    earned:sessionHistory.length>=10, color:c.purple },
-    { icon:"history",label:"Stage Graduate", earned:stage!=="A", color:c.blue },
+  const stageLabels = { A:"Isometric Loading", B:"Heavy Slow Resistance", C:"Plyometric Phase", M:"Maintenance" };
+  const collagenDays = painLog.length;
+  const saveSettings = () => { setSettings(localSettings); setSettingsOpen(null); };
+
+  const settingRows = [
+    { id:"notifications", icon:"bell",       label:"Notification Preferences" },
+    { id:"medical",       icon:"warn",        label:"Medical Disclaimer" },
+    { id:"equipment",     icon:"workout",     label:"Weight & Equipment" },
   ];
-
-  const saveSettings = () => { setSettings(localSettings); setSettingsOpen(false); };
 
   return (
     <div className="scroll-area fade-in" style={{ padding:"0 16px 100px" }}>
-      <div className="card" style={{ textAlign:"center" }}>
-        <div style={{ width:70, height:70, borderRadius:"50%", background:`linear-gradient(135deg,${c.green}18,${c.blue}18)`, border:`1.5px solid ${c.green}33`, display:"flex", alignItems:"center", justifyContent:"center", margin:"0 auto 14px", fontSize:24, fontWeight:800, fontFamily:"'Outfit',sans-serif", color:c.green }}>
-          {name.split(" ").map(n=>n[0]).join("")}
+
+      {/* Avatar + name */}
+      <div style={{ display:"flex", flexDirection:"column", alignItems:"center", paddingTop:8, paddingBottom:24 }}>
+        <div style={{ width:88, height:88, borderRadius:"50%", background:`linear-gradient(135deg,${c.green}33,${c.blue}22)`, border:`3px solid ${c.green}55`, display:"flex", alignItems:"center", justifyContent:"center", marginBottom:14, overflow:"hidden" }}>
+          <div style={{ fontSize:32, fontWeight:900, fontFamily:"'Outfit',sans-serif", color:c.green }}>AS</div>
         </div>
-        {editing ? <input value={name} onChange={e=>setName(e.target.value)} style={{ background:c.surfaceAlt, border:`1px solid #222`, color:c.textPrimary, borderRadius:8, padding:"8px 12px", fontSize:16, textAlign:"center", width:"100%", marginBottom:10, fontFamily:"'Geist',sans-serif", fontWeight:600 }} />
-                 : <div style={{ fontSize:20, fontWeight:700, fontFamily:"'Outfit',sans-serif", marginBottom:4 }}>{name}</div>}
-        <div style={{ fontSize:12, color:c.textSecondary, marginBottom:14 }}>Stage {stage} · Week {weeksInStage} · {sessionHistory.length} sessions</div>
-        <button onClick={()=>setEditing(e=>!e)} style={{ background:editing?c.green:c.badgeBg, color:editing?"#000":c.textSecondary, border:`1px solid ${editing?c.green:c.cardBorder}`, borderRadius:8, padding:"8px 20px", fontSize:12, fontWeight:600, letterSpacing:0.5, cursor:"pointer" }}>
-          {editing?"SAVE":"EDIT PROFILE"}
-        </button>
+        <div style={{ fontSize:24, fontWeight:900, fontFamily:"'Outfit',sans-serif", marginBottom:4 }}>Adam Simon</div>
+        <div style={{ fontSize:12, fontWeight:700, fontFamily:"'Outfit',sans-serif", letterSpacing:2, color:c.green }}>PHASE: {stageLabels[stage]?.toUpperCase()}</div>
+      </div>
+
+      {/* Streak card */}
+      <div className="card" style={{ background:c.streakBg, border:`1px solid ${c.green}33`, marginBottom:12, position:"relative", overflow:"hidden" }}>
+        <div style={{ position:"absolute", bottom:-20, right:-10, opacity:0.06 }}><Icon name="fire" size={100} color={c.green} /></div>
+        <div style={{ fontSize:9, fontWeight:700, fontFamily:"'Outfit',sans-serif", letterSpacing:3, color:c.green, marginBottom:6 }}>DAILY STREAK</div>
+        <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between" }}>
+          <div style={{ fontSize:28, fontWeight:900, fontFamily:"'Outfit',sans-serif", color:c.streakText, lineHeight:1.1 }}>{streak}-Day Streak<br/>Active</div>
+          <div style={{ width:44, height:44, borderRadius:"50%", background:c.green, display:"flex", alignItems:"center", justifyContent:"center" }}>
+            <Icon name="bolt" size={22} color="#000" />
+          </div>
+        </div>
+      </div>
+
+      {/* Stats row */}
+      <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10, marginBottom:12 }}>
+        {[{ label:"WORKOUTS", value:sessionHistory.length, color:c.textPrimary },
+          { label:"COLLAGEN DAYS", value:collagenDays, color:c.textPrimary }].map((s,i)=>(
+          <div key={i} className="card" style={{ margin:0, padding:"14px 16px" }}>
+            <div style={{ fontSize:9, color:c.textSecondary, fontWeight:700, fontFamily:"'Outfit',sans-serif", letterSpacing:1.5, marginBottom:4 }}>{s.label}</div>
+            <div style={{ fontSize:32, fontWeight:900, fontFamily:"'Outfit',sans-serif", color:s.color, lineHeight:1 }}>{s.value}</div>
+          </div>
+        ))}
       </div>
 
       {/* Recovery Stage */}
-      <div className="card">
-        <div style={{ fontSize:16, fontWeight:700, fontFamily:"'Outfit',sans-serif", marginBottom:14 }}>Recovery Stage</div>
-        <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr 1fr", gap:8, marginBottom:16 }}>
+      <div className="card" style={{ marginBottom:12 }}>
+        <div style={{ fontSize:14, fontWeight:700, fontFamily:"'Outfit',sans-serif", marginBottom:12 }}>Recovery Stage</div>
+        <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr 1fr", gap:8, marginBottom:14 }}>
           {["A","B","C","M"].map(s=>(
-            <button key={s} onClick={()=>setStage(s)} style={{ padding:"12px 0", borderRadius:10, border:`1px solid ${stage===s?c.green:"#1e1e1e"}`, background:stage===s?c.green+"12":c.surfaceAlt, color:stage===s?c.green:c.textSecondary, fontSize:18, fontWeight:800, fontFamily:"'Outfit',sans-serif", cursor:"pointer", transition:"all 0.2s" }}>{s}</button>
+            <button key={s} onClick={()=>setStage(s)} style={{ padding:"11px 0", borderRadius:10, border:`1px solid ${stage===s?c.green:c.cardBorder}`, background:stage===s?c.green+"15":c.surfaceAlt, color:stage===s?c.green:c.textSecondary, fontSize:18, fontWeight:800, fontFamily:"'Outfit',sans-serif", cursor:"pointer", transition:"all 0.2s" }}>{s}</button>
           ))}
         </div>
-        <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between" }}>
+        <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", paddingTop:10, borderTop:`1px solid ${c.cardBorder}` }}>
           <span style={{ fontSize:13, color:c.textSecondary }}>Weeks in current stage</span>
           <div style={{ display:"flex", alignItems:"center", gap:10 }}>
             <button onClick={()=>setWeeksInStage(w=>Math.max(1,w-1))} style={{ width:28, height:28, borderRadius:6, background:c.badgeBg, border:`1px solid ${c.surfaceBorder}`, color:c.textPrimary, fontSize:16, cursor:"pointer" }}>−</button>
-            <span className="mono" style={{ fontSize:18, fontWeight:700, fontFamily:"'Outfit',sans-serif", minWidth:24, textAlign:"center" }}>{weeksInStage}</span>
+            <span style={{ fontSize:18, fontWeight:700, fontFamily:"'Outfit',sans-serif", minWidth:24, textAlign:"center" }}>{weeksInStage}</span>
             <button onClick={()=>setWeeksInStage(w=>w+1)} style={{ width:28, height:28, borderRadius:6, background:c.badgeBg, border:`1px solid ${c.surfaceBorder}`, color:c.textPrimary, fontSize:16, cursor:"pointer" }}>+</button>
           </div>
         </div>
       </div>
 
-      {/* Workout Settings */}
-      <div className="card">
-        <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom: settingsOpen?16:0 }}>
-          <div>
-            <div style={{ fontSize:16, fontWeight:700, fontFamily:"'Outfit',sans-serif" }}>Workout Settings</div>
-            <div style={{ fontSize:12, color:c.textSecondary, marginTop:2 }}>Hold time · Rest time · Sets</div>
+      {/* Workout settings (inline) */}
+      <div className="card" style={{ marginBottom:12 }}>
+        <div onClick={()=>setSettingsOpen(settingsOpen==="workout"?null:"workout")} style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:settingsOpen==="workout"?16:0, cursor:"pointer" }}>
+          <div style={{ display:"flex", alignItems:"center", gap:10 }}>
+            <Icon name="workout" size={18} color={c.textSecondary} />
+            <span style={{ fontSize:14, fontWeight:600 }}>Workout Settings</span>
           </div>
-          <button onClick={()=>setSettingsOpen(o=>!o)} style={{ background:c.badgeBg, border:`1px solid ${c.surfaceBorder}`, borderRadius:8, padding:"7px 14px", fontSize:12, fontWeight:600, color:c.textSecondary, cursor:"pointer" }}>
-            {settingsOpen?"Cancel":"Edit"}
-          </button>
+          <div style={{ transform:settingsOpen==="workout"?"rotate(180deg)":"none", transition:"transform 0.2s" }}>
+            <Icon name="chevron" size={16} color={c.textSecondary} />
+          </div>
         </div>
-        {settingsOpen && (
-          <div className="fade-in-fast">
+        {settingsOpen === "workout" && (
+          <div className="fade-in-fast" style={{ marginTop:16 }}>
             {[{ label:"Hold Duration", key:"holdSecs", min:20, max:120, step:5, unit:"s" },
               { label:"Rest Duration", key:"restSecs", min:30, max:180, step:5, unit:"s" },
               { label:"Sets per Exercise", key:"totalSets", min:2, max:8, step:1, unit:"sets" }].map(s=>(
               <div key={s.key} style={{ marginBottom:16 }}>
                 <div style={{ display:"flex", justifyContent:"space-between", marginBottom:6 }}>
                   <span style={{ fontSize:13, fontWeight:500 }}>{s.label}</span>
-                  <span className="mono" style={{ fontSize:14, fontWeight:700, fontFamily:"'Outfit',sans-serif", color:c.blue }}>{localSettings[s.key]}{s.unit}</span>
+                  <span style={{ fontSize:14, fontWeight:700, fontFamily:"'Outfit',sans-serif", color:c.blue }}>{localSettings[s.key]}{s.unit}</span>
                 </div>
                 <input type="range" min={s.min} max={s.max} step={s.step} value={localSettings[s.key]}
-                  onChange={e=>setLocalSettings(prev=>({...prev,[s.key]:parseInt(e.target.value)}))}
+                  onChange={e=>setLocalSettings(p=>({...p,[s.key]:parseInt(e.target.value)}))}
                   style={{ width:"100%" }} />
-                <div style={{ display:"flex", justifyContent:"space-between", fontSize:10, color:c.textMuted, marginTop:3 }}>
-                  <span>{s.min}{s.unit}</span><span>{s.max}{s.unit}</span>
-                </div>
               </div>
             ))}
-            <button onClick={saveSettings} style={{ width:"100%", background:c.green, color:"#000", border:"none", borderRadius:10, padding:"12px", fontSize:14, fontWeight:700, fontFamily:"'Outfit',sans-serif", cursor:"pointer" }}>
-              Save Settings
-            </button>
-          </div>
-        )}
-        {!settingsOpen && (
-          <div style={{ display:"flex", gap:8, marginTop:14 }}>
-            {[{ label:"HOLD", value:`${settings.holdSecs}s` },{ label:"REST", value:`${settings.restSecs}s` },{ label:"SETS", value:settings.totalSets }].map((s,i)=>(
-              <div key={i} style={{ flex:1, background:c.surfaceAlt, borderRadius:10, padding:"10px 8px", textAlign:"center" }}>
-                <div style={{ fontSize:9, color:c.textSecondary, fontWeight:600, letterSpacing:1.5, marginBottom:4 }}>{s.label}</div>
-                <div className="mono" style={{ fontSize:18, fontWeight:700, fontFamily:"'Outfit',sans-serif" }}>{s.value}</div>
-              </div>
-            ))}
+            <button onClick={saveSettings} style={{ width:"100%", background:c.green, color:"#000", border:"none", borderRadius:10, padding:"12px", fontSize:14, fontWeight:700, fontFamily:"'Outfit',sans-serif", cursor:"pointer" }}>Save Settings</button>
           </div>
         )}
       </div>
 
-      {/* Achievements */}
-      <div className="card">
-        <div style={{ fontSize:16, fontWeight:700, fontFamily:"'Outfit',sans-serif", marginBottom:14 }}>Achievements</div>
-        <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10 }}>
-          {achievements.map((a,i)=>(
-            <div key={i} style={{ background:c.surfaceAlt, borderRadius:10, padding:"13px", display:"flex", alignItems:"center", gap:10, opacity:a.earned?1:0.3, border:`1px solid ${a.earned?a.color+"1a":c.badgeBg}` }}>
-              <div style={{ width:34, height:34, borderRadius:"50%", background:a.earned?a.color+"12":c.badgeBg, display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0 }}>
-                <Icon name={a.icon} size={17} color={a.earned?a.color:c.textSecondary} />
+      {/* Settings list rows */}
+      <div style={{ fontSize:9, fontWeight:700, fontFamily:"'Outfit',sans-serif", letterSpacing:3, color:c.textSecondary, marginBottom:8, paddingLeft:4 }}>SETTINGS</div>
+      <div className="card" style={{ padding:0, overflow:"hidden", marginBottom:12 }}>
+
+        {/* Notification Preferences */}
+        <div onClick={()=>setSettingsOpen(settingsOpen==="notifications"?null:"notifications")} style={{ display:"flex", alignItems:"center", gap:12, padding:"14px 16px", borderBottom:`1px solid ${c.cardBorder}`, cursor:"pointer" }}>
+          <Icon name="bell" size={18} color={c.textSecondary} />
+          <span style={{ flex:1, fontSize:14, fontWeight:500 }}>Notification Preferences</span>
+          <Icon name="chevron" size={14} color={c.textSecondary} />
+        </div>
+        {settingsOpen === "notifications" && (
+          <div className="fade-in-fast" style={{ padding:"12px 16px", borderBottom:`1px solid ${c.cardBorder}`, background:c.surfaceAlt }}>
+            {[{ label:"Daily Reminders", sub:"Session reminders", value:notifs, set:setNotifs },
+              { label:"Morning Check-In", sub:"8:00 AM reminder", value:morning, set:setMorning }].map((s,i)=>(
+              <div key={i} style={{ display:"flex", alignItems:"center", justifyContent:"space-between", padding:"10px 0", borderBottom:i<1?`1px solid ${c.cardBorder}`:"none" }}>
+                <div><div style={{ fontSize:13, fontWeight:500 }}>{s.label}</div><div style={{ fontSize:11, color:c.textSecondary }}>{s.sub}</div></div>
+                <div onClick={()=>s.set(v=>!v)} style={{ width:42, height:24, borderRadius:12, background:s.value?c.green:c.badgeBg, border:`1px solid ${s.value?c.green:c.cardBorder}`, cursor:"pointer", position:"relative", transition:"background 0.2s", flexShrink:0 }}>
+                  <div style={{ width:18, height:18, borderRadius:"50%", background:"#fff", position:"absolute", top:2, left:s.value?20:2, transition:"left 0.2s", boxShadow:"0 1px 4px rgba(0,0,0,0.3)" }} />
+                </div>
               </div>
-              <span style={{ fontSize:12, fontWeight:600, color:a.earned?c.textPrimary:c.textSecondary }}>{a.label}</span>
-            </div>
-          ))}
+            ))}
+          </div>
+        )}
+
+        {/* Medical Disclaimer */}
+        <div onClick={()=>setSettingsOpen(settingsOpen==="medical"?null:"medical")} style={{ display:"flex", alignItems:"center", gap:12, padding:"14px 16px", borderBottom:`1px solid ${c.cardBorder}`, cursor:"pointer" }}>
+          <Icon name="warn" size={18} color={c.textSecondary} />
+          <span style={{ flex:1, fontSize:14, fontWeight:500 }}>Medical Disclaimer</span>
+          <Icon name="chevron" size={14} color={c.textSecondary} />
+        </div>
+        {settingsOpen === "medical" && (
+          <div className="fade-in-fast" style={{ padding:"14px 16px", borderBottom:`1px solid ${c.cardBorder}`, background:c.surfaceAlt }}>
+            <p style={{ fontSize:12, color:c.textSecondary, lineHeight:1.7, margin:0 }}>
+              This app is for informational purposes only and does not constitute medical advice. If your tendon pain has persisted for many months or years, you may be in the degenerative phase of the injury. At this stage, corrective exercises alone may not be enough — consult a doctor or sports physical therapist for hands-on guidance before proceeding.
+            </p>
+          </div>
+        )}
+
+        {/* Weight & Equipment */}
+        <div onClick={()=>setSettingsOpen(settingsOpen==="equipment"?null:"equipment")} style={{ display:"flex", alignItems:"center", gap:12, padding:"14px 16px", cursor:"pointer" }}>
+          <Icon name="workout" size={18} color={c.textSecondary} />
+          <span style={{ flex:1, fontSize:14, fontWeight:500 }}>Weight &amp; Equipment</span>
+          <Icon name="chevron" size={14} color={c.textSecondary} />
+        </div>
+        {settingsOpen === "equipment" && (
+          <div className="fade-in-fast" style={{ padding:"14px 16px", background:c.surfaceAlt }}>
+            <p style={{ fontSize:12, color:c.textSecondary, lineHeight:1.7, margin:0 }}>
+              Use a resistance band or wall for Spanish Squats. For weighted exercises, start at bodyweight and add 2–5kg each week as tolerated. A decline board (15–25°) improves tendon isolation for heel drops.
+            </p>
+          </div>
+        )}
+      </div>
+
+      {/* Theme toggle row */}
+      <div style={{ fontSize:9, fontWeight:700, fontFamily:"'Outfit',sans-serif", letterSpacing:3, color:c.textSecondary, marginBottom:8, paddingLeft:4 }}>APPEARANCE</div>
+      <div className="card" style={{ padding:"14px 16px", marginBottom:12 }}>
+        <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between" }}>
+          <div style={{ display:"flex", alignItems:"center", gap:10 }}>
+            <Icon name={isDark?"moon":"sun"} size={18} color={c.textSecondary} />
+            <span style={{ fontSize:14, fontWeight:500 }}>Theme</span>
+          </div>
+          <div style={{ display:"flex", background:c.badgeBg, borderRadius:20, padding:3, border:`1px solid ${c.cardBorder}` }}>
+            {["DARK","LIGHT"].map(t=>(
+              <button key={t} onClick={()=>setIsDark(t==="DARK")} style={{ padding:"5px 14px", borderRadius:16, border:"none", background:(t==="DARK"&&isDark)||(t==="LIGHT"&&!isDark)?c.green:"transparent", color:(t==="DARK"&&isDark)||(t==="LIGHT"&&!isDark)?"#000":c.textSecondary, fontSize:11, fontWeight:700, fontFamily:"'Outfit',sans-serif", cursor:"pointer", transition:"all 0.2s" }}>{t}</button>
+            ))}
+          </div>
         </div>
       </div>
 
-      {/* Notification settings */}
-      <div className="card">
-        <div style={{ fontSize:16, fontWeight:700, fontFamily:"'Outfit',sans-serif", marginBottom:14 }}>Notifications</div>
-        {[{ label:"Daily Reminders", sub:"Session reminders", value:notifs, set:setNotifs },
-          { label:"Morning Check-In", sub:"8:00 AM reminder", value:morning, set:setMorning }].map((s,i)=>(
-          <div key={i} style={{ display:"flex", alignItems:"center", justifyContent:"space-between", padding:"12px 0", borderBottom:i<1?`1px solid ${c.cardBorder}`:"none" }}>
-            <div><div style={{ fontSize:14, fontWeight:500 }}>{s.label}</div><div style={{ fontSize:11, color:c.textSecondary, marginTop:2 }}>{s.sub}</div></div>
-            <div onClick={()=>s.set(v=>!v)} style={{ width:42, height:24, borderRadius:12, background:s.value?c.green:c.badgeBg, border:`1px solid ${s.value?c.green:c.cardBorder}`, cursor:"pointer", position:"relative", transition:"background 0.2s", flexShrink:0 }}>
-              <div style={{ width:18, height:18, borderRadius:"50%", background:"#fff", position:"absolute", top:2, left:s.value?20:2, transition:"left 0.2s", boxShadow:"0 1px 4px rgba(0,0,0,0.5)" }} />
-            </div>
-          </div>
-        ))}
-      </div>
+      {/* Sign out */}
+      <button style={{ width:"100%", background:c.red+"12", border:`1.5px solid ${c.red}44`, borderRadius:14, padding:"15px", fontSize:14, fontWeight:700, fontFamily:"'Outfit',sans-serif", color:c.red, cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center", gap:8 }}>
+        <Icon name="exit" size={16} color={c.red} />
+        Sign Out
+      </button>
     </div>
   );
 }
@@ -1554,6 +1712,22 @@ export default function App() {
     ? parseFloat((painLog.slice(-7).reduce((a,b) => a + b.value, 0) / Math.min(painLog.length, 7)).toFixed(1))
     : 0;
 
+  // ── Full-screen warning state ──
+  const recentPainVals = painLog.slice(-3).map(p => p.value);
+  const painSpikeDetected = recentPainVals.length === 3
+    && recentPainVals.every((v,i) => i===0 || v >= recentPainVals[i-1])
+    && recentPainVals[2] > recentPainVals[0];
+  const painIncrease = painSpikeDetected ? recentPainVals[2] - recentPainVals[0] : 0;
+  const [warningDismissed, setWarningDismissed] = useLocalStorage("ryk_warnDismissed", "");
+  const todayWarnKey = new Date().toLocaleDateString("en-GB");
+  const showWarningScreen = painSpikeDetected && warningDismissed !== todayWarnKey;
+
+  const handleAdjustIntensity = () => {
+    setIntensity(prev => Math.max(40, Math.round(prev * 0.85)));
+    setWarningDismissed(todayWarnKey);
+  };
+  const handleKeepPlan = () => setWarningDismissed(todayWarnKey);
+
   const handleSessionComplete = (session) => {
     setSessionHistory(prev => [...prev, { ...session, id: prev.length + 1 }]);
     setIntensity(session.intensity);
@@ -1580,7 +1754,6 @@ export default function App() {
 
         <div style={{ padding:"52px 20px 18px", display:"flex", alignItems:"center", justifyContent:"space-between", flexShrink:0 }}>
           <div style={{ fontSize:13, fontWeight:700, fontFamily:"'Outfit',sans-serif", letterSpacing:4, color:c.textPrimary }}>REBUILD YOUR KNEE</div>
-          {/* Dark / Light toggle */}
           <button onClick={() => setIsDark(d => !d)} style={{ width:36, height:36, borderRadius:10, background:c.card, border:`1px solid ${c.cardBorder}`, display:"flex", alignItems:"center", justifyContent:"center", cursor:"pointer", transition:"all 0.2s" }}>
             <Icon name={isDark ? "sun" : "moon"} size={17} color={c.textSecondary} />
           </button>
@@ -1590,7 +1763,7 @@ export default function App() {
           {activeTab==="today"     && <TodayScreen painLog={painLog} setPainLog={setPainLog} sessionHistory={sessionHistory} streak={streak} onStartWorkout={()=>setWorkoutActive(true)} settings={settings} stage={stage} />}
           {activeTab==="trends"    && <TrendsScreen painLog={painLog} sessionHistory={sessionHistory} onExport={handleExport} />}
           {activeTab==="protocols" && <ProtocolsScreen stage={stage} weeksInStage={weeksElapsed} avgPain={avgPain} onAdvanceStage={handleAdvanceStage} />}
-          {activeTab==="profile"   && <ProfileScreen stage={stage} weeksInStage={weeksElapsed} setStage={handleSetStage} setWeeksInStage={setWeeksInStage} settings={settings} setSettings={setSettings} sessionHistory={sessionHistory} />}
+          {activeTab==="profile"   && <ProfileScreen stage={stage} weeksInStage={weeksElapsed} setStage={handleSetStage} setWeeksInStage={setWeeksInStage} settings={settings} setSettings={setSettings} sessionHistory={sessionHistory} painLog={painLog} streak={streak} isDark={isDark} setIsDark={setIsDark} />}
         </div>
 
         <div style={{ position:"fixed", bottom:0, left:"50%", transform:"translateX(-50%)", width:"100%", maxWidth:420, background:c.navBg, borderTop:`1px solid ${c.cardBorder}`, display:"flex", zIndex:100, transition:"background 0.3s ease" }}>
@@ -1605,6 +1778,61 @@ export default function App() {
           })}
         </div>
       </div>
+
+      {/* Full-screen pain spike WARNING */}
+      {showWarningScreen && (
+        <div style={{ position:"fixed", inset:0, zIndex:300, background:"#0d0000", display:"flex", flexDirection:"column", maxWidth:420, margin:"0 auto", overflowY:"auto" }}>
+          {/* Back arrow */}
+          <div style={{ padding:"52px 20px 0", display:"flex", alignItems:"center", gap:12 }}>
+            <button onClick={handleKeepPlan} style={{ width:36, height:36, borderRadius:10, background:"#1a0000", border:"1px solid #3a0000", display:"flex", alignItems:"center", justifyContent:"center", cursor:"pointer" }}>
+              <Icon name="arrow" size={18} color="#888" style={{ transform:"rotate(180deg)" }} />
+            </button>
+            <div style={{ fontSize:13, fontWeight:700, fontFamily:"'Outfit',sans-serif", letterSpacing:4, color:"#888" }}>REBUILD YOUR KNEE</div>
+          </div>
+
+          {/* WARNING headline */}
+          <div style={{ padding:"32px 24px 0", textAlign:"center" }}>
+            <div style={{ fontSize:52, fontWeight:900, fontFamily:"'Outfit',sans-serif", color:"#ff2222", letterSpacing:-1, lineHeight:1, marginBottom:16 }}>WARNING</div>
+            <div style={{ fontSize:11, fontWeight:700, fontFamily:"'Outfit',sans-serif", letterSpacing:4, color:"#ff6644", marginBottom:20 }}>TENDON FATIGUE DETECTED</div>
+            <p style={{ fontSize:14, color:"#c0a0a0", lineHeight:1.65, maxWidth:320, margin:"0 auto 28px" }}>
+              Your 24-hour pain score increased by{" "}
+              <span style={{ color:"#ff4444", fontWeight:800 }}>{painIncrease} POINT{painIncrease!==1?"S":""}</span>.{" "}
+              This indicates the previous load was too high for current tendon capacity.
+            </p>
+          </div>
+
+          {/* Recovery plan card with image */}
+          <div style={{ margin:"0 20px 24px", background:"#1a0800", border:"1px solid #3a1500", borderRadius:16, overflow:"hidden" }}>
+            {/* Grayscale image placeholder — man stretching */}
+            <div style={{ height:160, background:"linear-gradient(135deg,#1a1a1a 0%,#2a2a2a 100%)", display:"flex", alignItems:"center", justifyContent:"center", position:"relative", overflow:"hidden" }}>
+              <div style={{ fontSize:64, opacity:0.15 }}>🧎</div>
+              <div style={{ position:"absolute", inset:0, background:"linear-gradient(to bottom,transparent 60%,#1a0800 100%)" }} />
+            </div>
+            <div style={{ padding:"16px" }}>
+              <div style={{ fontSize:10, fontWeight:700, fontFamily:"'Outfit',sans-serif", letterSpacing:3, color:"#ff8844", marginBottom:6 }}>TODAY'S ADJUSTMENT</div>
+              <div style={{ fontSize:18, fontWeight:800, fontFamily:"'Outfit',sans-serif", marginBottom:4, color:"#f2f2f2" }}>Active Recovery Plan</div>
+              <div style={{ fontSize:13, color:"#a08080", marginBottom:14 }}>2 sets of 30s light wall sits</div>
+              <div style={{ background:"#0d0000", borderRadius:10, padding:"12px 14px" }}>
+                <div style={{ fontSize:9, fontWeight:700, fontFamily:"'Outfit',sans-serif", letterSpacing:2, color:"#ff6644", marginBottom:6 }}>INFO</div>
+                <p style={{ fontSize:12, color:"#a08080", lineHeight:1.65, margin:0 }}>
+                  Based on Collagen Blueprint's reactive loading model. Reducing intensity allows for cellular reorganization and matrix repair.
+                </p>
+              </div>
+            </div>
+          </div>
+
+          {/* CTAs */}
+          <div style={{ padding:"0 20px 52px", display:"flex", flexDirection:"column", gap:12 }}>
+            <button onClick={handleAdjustIntensity} style={{ width:"100%", background:"#B2FF00", color:"#000", border:"none", borderRadius:50, padding:"18px", fontSize:15, fontWeight:900, fontFamily:"'Outfit',sans-serif", cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center", gap:10 }}>
+              ADJUST NEXT WORKOUT (−15%)
+              <Icon name="trends" size={18} color="#000" />
+            </button>
+            <button onClick={handleKeepPlan} style={{ width:"100%", background:"#1a0800", border:"1px solid #3a1500", borderRadius:50, padding:"17px", fontSize:14, fontWeight:700, fontFamily:"'Outfit',sans-serif", color:"#a08080", cursor:"pointer" }}>
+              KEEP CURRENT PLAN ANYWAY
+            </button>
+          </div>
+        </div>
+      )}
 
       {workoutActive && (
         <WorkoutScreen
