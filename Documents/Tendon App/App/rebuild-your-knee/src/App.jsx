@@ -1,12 +1,44 @@
 import React, { useState, useEffect, useRef, useCallback } from "react";
 
 // ── Constants ─────────────────────────────────────────────────────────────────
-const WORKOUT_EXERCISES = [
-  { name: "Wall Squats",          cue: "Back flat, knees at 90°, breathe steady" },
-  { name: "Calf Raises",          cue: "Slow and controlled, full range of motion" },
-  { name: "Leg Press Hold",       cue: "Press through your heel, engage the quad" },
-  { name: "Spanish Squat",        cue: "Knees out, torso upright, hold the tension" },
-  { name: "Eccentric Heel Drops", cue: "Lower slowly over 3 seconds, control the descent" },
+// ── Phase-specific exercises ──────────────────────────────────────────────────
+const EXERCISES_BY_STAGE = {
+  A: [
+    { name: "Wall Squats",          cue: "Back flat, knees at 90°, breathe steady — isometric hold" },
+    { name: "Spanish Squat",        cue: "Band behind knees, torso upright, hold the tension" },
+    { name: "Leg Extensions",       cue: "Heavy slow resistance, 3–5s down, full control" },
+    { name: "Quad Sets",            cue: "Towel under knee, press down for 5s, wake up the quad" },
+    { name: "Calf Raises",          cue: "Slow and controlled, full range of motion" },
+  ],
+  B: [
+    { name: "Wall Squats",          cue: "Increase hold duration or add light load this phase" },
+    { name: "Split Squats",         cue: "95% weight on front leg, slow descent over 3–5s" },
+    { name: "Spanish Squat",        cue: "Increase band tension — aim for 70% max effort" },
+    { name: "Leg Extensions",       cue: "Heavy slow resistance, 3–5s eccentric, no momentum" },
+    { name: "Eccentric Heel Drops", cue: "Lower slowly over 3 seconds, control the descent" },
+  ],
+  C: [
+    { name: "Bulgarian Split Squat",cue: "Rear foot elevated, 95% load on front leg, 3s down" },
+    { name: "Leg Press Hold",       cue: "Press through heel, engage quad — 45s isometric" },
+    { name: "Spanish Squat",        cue: "Full 45s holds at 70%+ MVC — push the load" },
+    { name: "Eccentric Heel Drops", cue: "Single leg, 3s down, focus on control not speed" },
+    { name: "Leg Extensions HSR",   cue: "Heavy slow resistance — 3s up, 3s down, no bounce" },
+  ],
+  M: [
+    { name: "Bulgarian Split Squat",cue: "Progressive load — increase weight each session" },
+    { name: "Single-Leg Press",     cue: "Full range, slow eccentric, bulletproofing the tendon" },
+    { name: "Spanish Squat",        cue: "Max load you can hold for 45s — maintenance phase" },
+    { name: "Eccentric Heel Drops", cue: "Add weight if bodyweight feels easy" },
+    { name: "Leg Extensions HSR",   cue: "Working sets — push to near failure on last set" },
+  ],
+};
+
+// ── Warm-up stretches ─────────────────────────────────────────────────────────
+const WARMUP_STRETCHES = [
+  { name: "Hamstring Stretch",  cue: "Seated or standing toe reach — hold 30s", hold: 30, emoji: "🦵" },
+  { name: "Quad Stretch",       cue: "Stand, pull foot to glute — hold 30s each side", hold: 30, emoji: "🦵" },
+  { name: "Calf Stretch",       cue: "Lean against wall, heel flat on ground — 30s", hold: 30, emoji: "🦶" },
+  { name: "Quad Sets",          cue: "Lie back, towel under knee, press down — 5s holds × 10", hold: 30, emoji: "🏋️" },
 ];
 
 const STAGE_CRITERIA = {
@@ -269,8 +301,35 @@ function Sparkline({ data, color, height = 52 }) {
 }
 
 // ── WORKOUT SCREEN ────────────────────────────────────────────────────────────
-function WorkoutScreen({ onExit, onComplete, settings, intensity: initIntensity }) {
+function WorkoutScreen({ onExit, onComplete, settings, intensity: initIntensity, stage }) {
   const { holdSecs, restSecs, totalSets } = settings;
+  const WORKOUT_EXERCISES = EXERCISES_BY_STAGE[stage] || EXERCISES_BY_STAGE.A;
+
+  // ── Warm-up state ──
+  const [warmupDone, setWarmupDone]     = useState(false);
+  const [warmupIdx, setWarmupIdx]       = useState(0);
+  const [warmupTimeLeft, setWarmupTimeLeft] = useState(WARMUP_STRETCHES[0].hold);
+  const [warmupRunning, setWarmupRunning]   = useState(false);
+  const warmupRef = useRef(null);
+
+  useEffect(() => {
+    if (warmupRunning && warmupTimeLeft > 0) {
+      warmupRef.current = setInterval(() => setWarmupTimeLeft(t => t - 1), 1000);
+    } else {
+      clearInterval(warmupRef.current);
+      if (warmupRunning && warmupTimeLeft === 0) {
+        // auto-advance to next stretch
+        if (warmupIdx < WARMUP_STRETCHES.length - 1) {
+          setWarmupIdx(i => i + 1);
+          setWarmupTimeLeft(WARMUP_STRETCHES[warmupIdx + 1].hold);
+          setWarmupRunning(false);
+        } else {
+          setWarmupRunning(false);
+        }
+      }
+    }
+    return () => clearInterval(warmupRef.current);
+  }, [warmupRunning, warmupTimeLeft, warmupIdx]);
   const [exIdx, setExIdx]               = useState(0);
   const [phase, setPhase]               = useState("idle");
   const [timeLeft, setTimeLeft]         = useState(holdSecs);
@@ -328,7 +387,13 @@ function WorkoutScreen({ onExit, onComplete, settings, intensity: initIntensity 
     return () => clearInterval(timerRef.current);
   }, [isRunning, tick]);
 
+  const [confirmedEffort, setConfirmedEffort] = useState(false);
+
+  // Show effort confirmation before first hold of the session
+  const showEffortPrompt = isIdle && exIdx === 0 && completedSets === 0 && !confirmedEffort;
+
   const handleStart    = () => { setPhase("hold"); setTimeLeft(holdSecs); setIsRunning(true); };
+  const handlePause    = () => setIsRunning(r => !r);
   const handlePause    = () => setIsRunning(r => !r);
   const handleResetSet = () => { clearInterval(timerRef.current); setIsRunning(false); setPhase("idle"); setTimeLeft(holdSecs); };
   const handleNextEx   = () => {
@@ -338,9 +403,104 @@ function WorkoutScreen({ onExit, onComplete, settings, intensity: initIntensity 
   const handleFinish = () => {
     const elapsed = Math.round((Date.now()-sessionStartTime)/60000);
     onComplete({ date: new Date().toLocaleDateString("en-GB",{day:"2-digit",month:"short",year:"numeric"}), exercises: WORKOUT_EXERCISES.length, totalSets: WORKOUT_EXERCISES.length * totalSets, intensity, duration: elapsed, notes: sessionNote });
-    // Don't unmount yet — transition to saved screen first
     setPhase("saved");
   };
+
+  // ── WARM-UP SCREEN ────────────────────────────────────────────────────────────
+  if (!warmupDone) {
+    const stretch = WARMUP_STRETCHES[warmupIdx];
+    const pct = 1 - warmupTimeLeft / stretch.hold;
+    const r2 = 68, circ2 = 2 * Math.PI * r2;
+    const allDone = warmupIdx === WARMUP_STRETCHES.length - 1 && warmupTimeLeft === 0 && !warmupRunning;
+    return (
+      <div style={{ position:"fixed", inset:0, background:"#000", zIndex:200, display:"flex", flexDirection:"column" }}>
+        {/* Header */}
+        <div style={{ padding:"52px 20px 16px", display:"flex", alignItems:"center", justifyContent:"space-between" }}>
+          <div>
+            <div style={{ fontSize:11, fontWeight:700, fontFamily:"'Outfit',sans-serif", color:THEMES.dark.textSecondary, letterSpacing:3 }}>WARM-UP</div>
+            <div style={{ fontSize:20, fontWeight:800, fontFamily:"'Outfit',sans-serif", marginTop:2 }}>Stretching &amp; Activation</div>
+          </div>
+          <button onClick={()=>setShowExit(true)} style={{ background:"transparent", border:`1px solid #333`, borderRadius:10, padding:"8px 14px", fontSize:12, fontWeight:600, color:THEMES.dark.textSecondary, cursor:"pointer" }}>Skip</button>
+        </div>
+
+        {/* Step dots */}
+        <div style={{ display:"flex", gap:6, padding:"0 20px 20px" }}>
+          {WARMUP_STRETCHES.map((_,i) => (
+            <div key={i} style={{ flex:1, height:3, borderRadius:2, background: i < warmupIdx ? THEMES.dark.green : i === warmupIdx ? THEMES.dark.green+"88" : "#222", transition:"background 0.4s" }} />
+          ))}
+        </div>
+
+        {/* Main content */}
+        <div style={{ flex:1, display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", padding:"0 28px" }}>
+          <div style={{ fontSize:44, marginBottom:16 }}>{stretch.emoji}</div>
+          <div style={{ fontSize:26, fontWeight:900, fontFamily:"'Outfit',sans-serif", textAlign:"center", marginBottom:8 }}>{stretch.name}</div>
+          <div style={{ fontSize:14, color:THEMES.dark.textSecondary, textAlign:"center", lineHeight:1.6, marginBottom:32, maxWidth:280 }}>{stretch.cue}</div>
+
+          {/* Timer ring */}
+          <div style={{ position:"relative", marginBottom:28 }}>
+            <svg width="160" height="160" viewBox="0 0 160 160">
+              <circle cx="80" cy="80" r={r2} fill="none" stroke="#1a1a1a" strokeWidth="7" />
+              <circle cx="80" cy="80" r={r2} fill="none" stroke={THEMES.dark.green} strokeWidth="7"
+                strokeDasharray={circ2} strokeDashoffset={circ2 * (1 - pct)}
+                strokeLinecap="round" transform="rotate(-90 80 80)"
+                style={{ transition:"stroke-dashoffset 0.8s ease" }} />
+            </svg>
+            <div style={{ position:"absolute", inset:0, display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center" }}>
+              <span style={{ fontSize:36, fontWeight:800, fontFamily:"'JetBrains Mono',monospace", color: warmupTimeLeft===0 ? THEMES.dark.green : "#f2f2f2" }}>
+                {warmupTimeLeft === 0 ? "✓" : warmupTimeLeft}
+              </span>
+              <span style={{ fontSize:10, color:THEMES.dark.textSecondary, fontWeight:600, letterSpacing:2 }}>
+                {warmupTimeLeft === 0 ? "DONE" : "SECS"}
+              </span>
+            </div>
+          </div>
+
+          <div style={{ fontSize:12, color:THEMES.dark.textSecondary }}>
+            Stretch {warmupIdx + 1} of {WARMUP_STRETCHES.length}
+          </div>
+        </div>
+
+        {/* Bottom buttons */}
+        <div style={{ padding:"0 20px 48px", display:"flex", flexDirection:"column", gap:10 }}>
+          {allDone ? (
+            <button onClick={()=>setWarmupDone(true)} style={{ width:"100%", background:THEMES.dark.green, color:"#000", border:"none", borderRadius:50, padding:"18px", fontSize:16, fontWeight:900, fontFamily:"'Outfit',sans-serif", cursor:"pointer" }}>
+              Start Workout →
+            </button>
+          ) : warmupTimeLeft === 0 && warmupIdx < WARMUP_STRETCHES.length - 1 ? (
+            <button onClick={()=>{ setWarmupIdx(i=>i+1); setWarmupTimeLeft(WARMUP_STRETCHES[warmupIdx+1].hold); setWarmupRunning(false); }} style={{ width:"100%", background:THEMES.dark.green, color:"#000", border:"none", borderRadius:50, padding:"18px", fontSize:16, fontWeight:900, fontFamily:"'Outfit',sans-serif", cursor:"pointer" }}>
+              Next Stretch →
+            </button>
+          ) : !warmupRunning ? (
+            <button onClick={()=>setWarmupRunning(true)} style={{ width:"100%", background:THEMES.dark.green, color:"#000", border:"none", borderRadius:50, padding:"18px", fontSize:16, fontWeight:900, fontFamily:"'Outfit',sans-serif", cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center", gap:10 }}>
+              <Icon name="play" size={17} color="#000" />
+              {warmupIdx === 0 && warmupTimeLeft === stretch.hold ? "Begin Warm-Up" : "Resume"}
+            </button>
+          ) : (
+            <button onClick={()=>setWarmupRunning(false)} style={{ width:"100%", background:"#111", color:THEMES.dark.textSecondary, border:"1px solid #333", borderRadius:50, padding:"18px", fontSize:16, fontWeight:700, fontFamily:"'Outfit',sans-serif", cursor:"pointer" }}>
+              Pause
+            </button>
+          )}
+          <button onClick={()=>setWarmupDone(true)} style={{ width:"100%", background:"transparent", border:"none", padding:"10px", fontSize:13, fontWeight:600, color:THEMES.dark.textSecondary, cursor:"pointer" }}>
+            Skip to Workout
+          </button>
+        </div>
+
+        {/* Exit confirm */}
+        {showExit && (
+          <div style={{ position:"absolute", inset:0, background:"#000000cc", display:"flex", alignItems:"center", justifyContent:"center", padding:24 }}>
+            <div style={{ background:"#141414", border:"1px solid #222", borderRadius:20, padding:24, width:"100%", maxWidth:340, textAlign:"center" }}>
+              <div style={{ fontSize:16, fontWeight:700, fontFamily:"'Outfit',sans-serif", marginBottom:6 }}>Exit workout?</div>
+              <div style={{ fontSize:13, color:THEMES.dark.textSecondary, marginBottom:20 }}>Progress won't be saved</div>
+              <div style={{ display:"flex", gap:10 }}>
+                <button onClick={()=>setShowExit(false)} style={{ flex:1, background:"#1a1a1a", border:"1px solid #333", borderRadius:50, padding:"12px", fontSize:14, fontWeight:600, color:THEMES.dark.textSecondary, cursor:"pointer" }}>Stay</button>
+                <button onClick={onExit} style={{ flex:1, background:THEMES.dark.red+"15", border:`1.5px solid ${THEMES.dark.red}55`, borderRadius:50, padding:"12px", fontSize:14, fontWeight:700, color:THEMES.dark.red, cursor:"pointer" }}>Exit</button>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  }
 
   // ── SESSION SAVED CELEBRATION SCREEN ──
   if (phase === "saved") {
@@ -560,10 +720,30 @@ function WorkoutScreen({ onExit, onComplete, settings, intensity: initIntensity 
 
             {/* Action button — full-width pill */}
             {isIdle && (
-              <button onClick={handleStart} style={{ width:"100%", maxWidth:340, background:THEMES.dark.green, color:"#000", border:"none", borderRadius:50, padding:"17px", fontSize:16, fontWeight:800, fontFamily:"'Outfit',sans-serif", cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center", gap:10, boxShadow:`0 0 24px ${THEMES.dark.green}44` }}>
-                <Icon name="play" size={17} color="#000" />
-                {completedSets===0 ? "Start Hold" : `Start Set ${completedSets+1}`}
-              </button>
+              showEffortPrompt ? (
+                <div className="fade-in" style={{ width:"100%", maxWidth:340 }}>
+                  <div style={{ background:"#111", border:"1px solid #222", borderRadius:16, padding:"16px", marginBottom:12, textAlign:"center" }}>
+                    <div style={{ fontSize:13, fontWeight:800, fontFamily:"'Outfit',sans-serif", color:THEMES.dark.green, letterSpacing:1, marginBottom:6 }}>EFFORT CHECK</div>
+                    <div style={{ fontSize:14, fontWeight:600, marginBottom:6 }}>Are you working at ~70% of your max effort?</div>
+                    <div style={{ fontSize:12, color:THEMES.dark.textSecondary, lineHeight:1.55 }}>
+                      Barely trying won't stimulate tendon remodelling. You should feel significant discomfort — not pain, but challenge.
+                    </div>
+                  </div>
+                  <div style={{ display:"flex", gap:10 }}>
+                    <button onClick={()=>{ setIntensity(i => Math.min(i, 65)); setConfirmedEffort(true); }} style={{ flex:1, background:"#111", border:"1px solid #333", borderRadius:50, padding:"14px", fontSize:13, fontWeight:700, color:THEMES.dark.textSecondary, cursor:"pointer" }}>
+                      Need to increase load
+                    </button>
+                    <button onClick={()=>setConfirmedEffort(true)} style={{ flex:1, background:THEMES.dark.green, color:"#000", border:"none", borderRadius:50, padding:"14px", fontSize:13, fontWeight:800, fontFamily:"'Outfit',sans-serif", cursor:"pointer" }}>
+                      Yes, let's go →
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <button onClick={handleStart} style={{ width:"100%", maxWidth:340, background:THEMES.dark.green, color:"#000", border:"none", borderRadius:50, padding:"17px", fontSize:16, fontWeight:800, fontFamily:"'Outfit',sans-serif", cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center", gap:10, boxShadow:`0 0 24px ${THEMES.dark.green}44` }}>
+                  <Icon name="play" size={17} color="#000" />
+                  {completedSets===0 ? "Start Hold" : `Start Set ${completedSets+1}`}
+                </button>
+              )
             )}
             {isHold && (
               <div style={{ width:"100%", maxWidth:340, display:"flex", gap:10 }}>
@@ -614,9 +794,29 @@ function TodayScreen({ painLog, setPainLog, sessionHistory, streak, onStartWorko
   const [supplements, setSupplements] = useState([false,false]);
   const supps = ["15g Collagen Peptides","225mg Vitamin C"];
 
+  // Stage-specific exercise list for the preview card
+  const WORKOUT_EXERCISES = EXERCISES_BY_STAGE[stage] || EXERCISES_BY_STAGE.A;
+
   // Detect if a session was completed today
   const todayStr = new Date().toLocaleDateString("en-GB",{day:"2-digit",month:"short",year:"numeric"});
   const sessionToday = sessionHistory.some(s => s.date === todayStr);
+
+  // 48-hour rest check — find the most recent session date
+  const lastSession = sessionHistory.length > 0 ? sessionHistory[sessionHistory.length - 1] : null;
+  const hoursSinceLastSession = lastSession
+    ? (Date.now() - new Date(lastSession.date.split(" ").reverse().join(" "))) / 3600000
+    : 999;
+  // Parse the stored date string "DD Mon YYYY" properly
+  const lastSessionDate = lastSession ? (() => {
+    const parts = lastSession.date.split(" "); // ["24","Feb","2026"]
+    const months = {Jan:0,Feb:1,Mar:2,Apr:3,May:4,Jun:5,Jul:6,Aug:7,Sep:8,Oct:9,Nov:10,Dec:11};
+    return new Date(parseInt(parts[2]), months[parts[1]], parseInt(parts[0]));
+  })() : null;
+  const daysSinceLast = lastSessionDate
+    ? Math.floor((Date.now() - lastSessionDate.getTime()) / 86400000)
+    : 99;
+  const within48hrs = daysSinceLast === 0 && !sessionToday; // trained today already handled separately
+  const needsRest   = daysSinceLast < 1 && !sessionToday;  // same-day attempt
 
   // Timestamp-based nutrition timer — survives lock screen / backgrounding
   const DURATION = 3600;
@@ -750,13 +950,28 @@ function TodayScreen({ painLog, setPainLog, sessionHistory, streak, onStartWorko
         </div>
       )}
 
-      {/* Pain spike warning */}
+      {/* Pain spike warning — rich intervention card */}
       {painSpike && (
-        <div className="slide-up" style={{ background:c.red+"11", border:`1px solid ${c.red}33`, borderRadius:14, padding:"14px 16px", marginBottom:12, display:"flex", gap:12, alignItems:"flex-start" }}>
-          <Icon name="warn" size={18} color={c.red} />
-          <div>
-            <div style={{ fontSize:13, fontWeight:700, fontFamily:"'Outfit',sans-serif", color:c.red, marginBottom:2 }}>Pain trending up</div>
-            <div style={{ fontSize:12, color:c.textSecondary, lineHeight:1.5 }}>Your last 3 check-ins show increasing pain. Consider reducing intensity or taking a rest day.</div>
+        <div className="slide-up" style={{ background:c.red+"0d", border:`1.5px solid ${c.red}44`, borderRadius:16, padding:"16px", marginBottom:12 }}>
+          <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:12 }}>
+            <div style={{ width:34, height:34, borderRadius:10, background:c.red+"18", display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0 }}>
+              <Icon name="warn" size={18} color={c.red} />
+            </div>
+            <div>
+              <div style={{ fontSize:14, fontWeight:800, fontFamily:"'Outfit',sans-serif", color:c.red }}>⚠️ Hold On — Tendon Needs More Time</div>
+              <div style={{ fontSize:11, color:c.textSecondary, marginTop:1 }}>Pain trending up over last 3 check-ins</div>
+            </div>
+          </div>
+          <div style={{ fontSize:12, color:c.textSecondary, lineHeight:1.6, marginBottom:12 }}>
+            <strong style={{ color:c.textPrimary }}>The 24-Hour Rule:</strong> Your pain hasn't returned to baseline — last session load was too high.
+          </div>
+          <div style={{ background:c.surface, borderRadius:12, padding:"12px 14px", marginBottom:8 }}>
+            <div style={{ fontSize:11, fontWeight:700, fontFamily:"'Outfit',sans-serif", color:c.red, letterSpacing:1, marginBottom:6 }}>TODAY'S PLAN</div>
+            <div style={{ fontSize:12, color:c.textSecondary, lineHeight:1.7 }}>
+              • Take a <strong style={{ color:c.textPrimary }}>complete rest day</strong> from loading<br/>
+              • Or do <strong style={{ color:c.textPrimary }}>2–3 sets of light isometrics</strong> (30s holds) if pain is tolerable<br/>
+              • When you return: reduce <strong style={{ color:c.textPrimary }}>volume or intensity by 10–20%</strong>
+            </div>
           </div>
         </div>
       )}
@@ -865,9 +1080,20 @@ function TodayScreen({ painLog, setPainLog, sessionHistory, streak, onStartWorko
             <span style={{ marginLeft:"auto", fontSize:11, color:c.dimText, fontWeight:500 }}>{settings.totalSets} × {settings.holdSecs}s</span>
           </div>
         ))}
-        <button onClick={onStartWorkout} style={{ width:"100%", marginTop:18, background:c.green, color:"#000", border:"none", borderRadius:50, padding:"16px", fontSize:15, fontWeight:800, fontFamily:"'Outfit',sans-serif", cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center", gap:10, boxShadow:`0 0 20px ${c.green}33` }}>
-          <Icon name="play" size={17} color="#000" />
-          Ready to Workout
+        {/* 48-hour rest warning */}
+        {needsRest && !sessionToday && (
+          <div style={{ background:c.yellow+"11", border:`1px solid ${c.yellow}33`, borderRadius:12, padding:"12px 14px", marginTop:14, display:"flex", gap:10, alignItems:"flex-start" }}>
+            <Icon name="warn" size={16} color={c.yellow} />
+            <div style={{ fontSize:12, color:c.textSecondary, lineHeight:1.55 }}>
+              <strong style={{ color:c.yellow }}>48-hour rule:</strong> Your last session was today. Tendons need 48hrs for net positive collagen synthesis. Rest up.
+            </div>
+          </div>
+        )}
+        <button
+          onClick={needsRest && !sessionToday ? undefined : onStartWorkout}
+          style={{ width:"100%", marginTop:18, background: needsRest && !sessionToday ? c.badgeBg : c.green, color: needsRest && !sessionToday ? c.textSecondary : "#000", border: needsRest && !sessionToday ? `1px solid ${c.cardBorder}` : "none", borderRadius:50, padding:"16px", fontSize:15, fontWeight:800, fontFamily:"'Outfit',sans-serif", cursor: needsRest && !sessionToday ? "not-allowed" : "pointer", display:"flex", alignItems:"center", justifyContent:"center", gap:10, boxShadow: needsRest && !sessionToday ? "none" : `0 0 20px ${c.green}33`, opacity: needsRest && !sessionToday ? 0.6 : 1 }}>
+          <Icon name={needsRest && !sessionToday ? "moon" : "play"} size={17} color={needsRest && !sessionToday ? c.textSecondary : "#000"} />
+          {needsRest && !sessionToday ? "Rest Day — Come Back Tomorrow" : sessionToday ? "Workout Complete Today ✓" : "Ready to Workout"}
         </button>
       </div>
 
@@ -1386,6 +1612,7 @@ export default function App() {
           onComplete={handleSessionComplete}
           settings={settings}
           intensity={intensity}
+          stage={stage}
         />
       )}
     </ThemeContext.Provider>
