@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from "react";
+import React, { useState, useEffect, useRef, useCallback } from "react";
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 const WORKOUT_EXERCISES = [
@@ -18,32 +18,48 @@ const STAGE_CRITERIA = {
 
 const DEFAULT_SETTINGS = { holdSecs: 45, restSecs: 60, totalSets: 4 };
 
-const colors = {
-  bg: "#0a0a0a", card: "#141414", cardBorder: "#222",
-  green: "#B2FF00", blue: "#3b82f6", yellow: "#eab308",
-  red: "#ef4444", orange: "#f97316", purple: "#a855f7",
-  textPrimary: "#f2f2f2", textSecondary: "#777", textMuted: "#3a3a3a",
-  navBg: "#0d0d0d",
+const THEMES = {
+  dark: {
+    bg: "#0a0a0a", card: "#141414", cardBorder: "#222",
+    green: "#B2FF00", blue: "#3b82f6", yellow: "#eab308",
+    red: "#ef4444", orange: "#f97316", purple: "#a855f7",
+    textPrimary: "#f2f2f2", textSecondary: "#777", textMuted: "#3a3a3a",
+    navBg: "#0d0d0d", inputBg: "#0e0e0e", rowBorder: "#1a1a1a",
+    timerTrack: "#1a1a1a", barEmpty: "#1e1e1e", barBorder: "#2a2a2a",
+    sliderThumbBorder: "#0a0a0a",
+  },
+  light: {
+    bg: "#f5f5f5", card: "#ffffff", cardBorder: "#e5e5e5",
+    green: "#7ab800", blue: "#2563eb", yellow: "#ca8a04",
+    red: "#dc2626", orange: "#ea580c", purple: "#9333ea",
+    textPrimary: "#0a0a0a", textSecondary: "#666", textMuted: "#bbb",
+    navBg: "#ffffff", inputBg: "#f9f9f9", rowBorder: "#efefef",
+    timerTrack: "#e5e5e5", barEmpty: "#e8e8e8", barBorder: "#d5d5d5",
+    sliderThumbBorder: "#f5f5f5",
+  },
 };
 
-const styles = `
+// Theme context — lets any component read colors without prop drilling
+const ThemeContext = React.createContext(THEMES.dark);
+const useTheme = () => React.useContext(ThemeContext);
+
+const makeStyles = (c) => `
   @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800;900&family=Geist:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;600;700&display=swap');
   * { box-sizing: border-box; margin: 0; padding: 0; }
-  body { background: ${colors.bg}; font-family: 'Geist', sans-serif; color: ${colors.textPrimary}; }
-  :root { color-scheme: dark; }
-  /* Outfit for all bold/display text — geometric like Futura Bold */
+  body { background: ${c.bg}; font-family: 'Geist', sans-serif; color: ${c.textPrimary}; transition: background 0.3s ease, color 0.3s ease; }
+  :root { color-scheme: ${c.bg === "#f5f5f5" ? "light" : "dark"}; }
   button { font-family: 'Outfit', sans-serif !important; }
   .outfit { font-family: 'Outfit', sans-serif; }
   input[type=range] { -webkit-appearance: none; appearance: none; background: transparent; cursor: pointer; width: 100%; }
-  input[type=range]::-webkit-slider-track { height: 4px; background: #2a2a2a; border-radius: 2px; }
-  input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; height: 18px; width: 18px; border-radius: 50%; background: ${colors.blue}; margin-top: -7px; }
+  input[type=range]::-webkit-slider-track { height: 4px; background: ${c.cardBorder}; border-radius: 2px; }
+  input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; height: 18px; width: 18px; border-radius: 50%; background: ${c.blue}; margin-top: -7px; }
   textarea { font-family: 'Geist', sans-serif; resize: none; outline: none; }
   .scroll-area { overflow-y: auto; scrollbar-width: none; }
   .scroll-area::-webkit-scrollbar { display: none; }
   @keyframes fadeIn       { from { opacity:0; transform:translateY(10px); } to { opacity:1; transform:translateY(0); } }
   @keyframes fadeInFast   { from { opacity:0; transform:translateY(4px);  } to { opacity:1; transform:translateY(0); } }
   @keyframes slideInRight { from { opacity:0; transform:translateX(30px); } to { opacity:1; transform:translateX(0); } }
-  @keyframes pulse        { 0%,100% { box-shadow:0 0 0 0 rgba(34,197,94,0.35); } 50% { box-shadow:0 0 0 14px rgba(34,197,94,0); } }
+  @keyframes pulse        { 0%,100% { box-shadow:0 0 0 0 rgba(178,255,0,0.35); } 50% { box-shadow:0 0 0 14px rgba(178,255,0,0); } }
   @keyframes completePop  { 0% { transform:scale(0.75); opacity:0; } 65% { transform:scale(1.06); } 100% { transform:scale(1); opacity:1; } }
   @keyframes slideUp      { from { opacity:0; transform:translateY(16px); } to { opacity:1; transform:translateY(0); } }
   .fade-in        { animation: fadeIn 0.35s ease forwards; }
@@ -52,15 +68,17 @@ const styles = `
   .pulse-green    { animation: pulse 2s infinite; }
   .complete-pop   { animation: completePop 0.45s cubic-bezier(0.34,1.56,0.64,1) forwards; }
   .slide-up       { animation: slideUp 0.3s cubic-bezier(0.16,1,0.3,1) forwards; }
-  .card { background:${colors.card}; border:1px solid ${colors.cardBorder}; border-radius:18px; padding:20px; margin-bottom:12px; }
+  .card { background:${c.card}; border:1px solid ${c.cardBorder}; border-radius:18px; padding:20px; margin-bottom:12px; transition: background 0.3s ease, border-color 0.3s ease; }
   .mono { font-family:'JetBrains Mono',monospace; }
-  .outfit { font-family:'Outfit',sans-serif; }
-  button { font-family:'Outfit',sans-serif; }
   h1,h2,h3 { font-family:'Outfit',sans-serif; }
-  .btn-primary { background:${colors.green}; color:#000; border:none; border-radius:14px; padding:15px 36px; font-size:15px; font-weight:700; cursor:pointer; letter-spacing:0.3px; display:inline-flex; align-items:center; gap:10px; transition:opacity 0.15s; }
+  .btn-primary { background:${c.green}; color:#000; border:none; border-radius:14px; padding:15px 36px; font-size:15px; font-weight:700; cursor:pointer; letter-spacing:0.3px; display:inline-flex; align-items:center; gap:10px; transition:opacity 0.15s; }
   .btn-primary:active { opacity:0.8; }
-  .btn-icon { background:#1a1a1a; border:1px solid #2a2a2a; border-radius:12px; padding:12px 14px; cursor:pointer; display:inline-flex; align-items:center; }
+  .btn-icon { background:${c.card}; border:1px solid ${c.cardBorder}; border-radius:12px; padding:12px 14px; cursor:pointer; display:inline-flex; align-items:center; }
 `;
+
+// Keep a module-level colors alias that components can use as fallback
+// (overridden by useTheme() inside components)
+let colors = THEMES.dark;
 
 // ── Sound / Haptic helpers ────────────────────────────────────────────────────
 function playTone(freq = 880, duration = 0.15, type = "sine") {
@@ -128,12 +146,14 @@ const Icon = ({ name, size = 20, color = "currentColor" }) => {
     history:   <svg width={size} height={size} viewBox="0 0 24 24" {...s}><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 .49-4.95"/><polyline points="12 7 12 12 15 15"/></svg>,
     warn:      <svg width={size} height={size} viewBox="0 0 24 24" {...s}><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>,
     star:      <svg width={size} height={size} viewBox="0 0 24 24" {...s}><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>,
+    sun:       <svg width={size} height={size} viewBox="0 0 24 24" {...s}><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>,
   };
   return map[name] || null;
 };
 
 // ── Custom Pain Slider ────────────────────────────────────────────────────────
 function PainSlider({ value, onChange }) {
+  const c = useTheme();
   const trackRef = useRef(null);
   const dragging = useRef(false);
   const getVal = (e) => {
@@ -164,14 +184,16 @@ function PainSlider({ value, onChange }) {
         onMouseDown={e => { dragging.current=true; onChange(getVal(e)); }}
         onTouchStart={e => { dragging.current=true; onChange(getVal(e)); }}>
         <div style={{ width:"100%", height:10, borderRadius:5, background:"linear-gradient(to right,#B2FF00 0%,#d4ff00 15%,#ffeb3b 40%,#ff9800 60%,#ff3d00 80%,#e91e8c 100%)", boxShadow:"0 0 12px rgba(0,0,0,0.4)" }} />
-        <div style={{ position:"absolute", left:`calc(${pct}% - 14px)`, width:28, height:28, borderRadius:"50%", background:"#fff", border:"3px solid #0a0a0a", boxShadow:`0 0 0 2px ${thumbColor},0 4px 12px rgba(0,0,0,0.7)`, transition:"box-shadow 0.15s ease", cursor:"grab", zIndex:2 }} />
+        <div style={{ position:"absolute", left:`calc(${pct}% - 14px)`, width:28, height:28, borderRadius:"50%", background:"#fff", border:`3px solid ${c.sliderThumbBorder}`, boxShadow:`0 0 0 2px ${thumbColor},0 4px 12px rgba(0,0,0,0.7)`, transition:"box-shadow 0.15s ease", cursor:"grab", zIndex:2 }} />
       </div>
     </div>
   );
 }
 
 // ── Circular Timer ────────────────────────────────────────────────────────────
-function CircularTimer({ seconds, total, label, color = colors.green }) {
+function CircularTimer({ seconds, total, label, color }) {
+  const c = useTheme();
+  const col = color || c.green;
   const r = 68, circ = 2 * Math.PI * r;
   const offset = circ * (1 - seconds / total);
   const mins = String(Math.floor(seconds / 60)).padStart(2, "0");
@@ -179,39 +201,43 @@ function CircularTimer({ seconds, total, label, color = colors.green }) {
   return (
     <div style={{ display:"flex", justifyContent:"center", margin:"10px 0" }}>
       <svg width="166" height="166" viewBox="0 0 166 166">
-        <circle cx="83" cy="83" r={r} fill="none" stroke="#1a1a1a" strokeWidth="7" />
-        <circle cx="83" cy="83" r={r} fill="none" stroke={color} strokeWidth="7" strokeDasharray={circ} strokeDashoffset={offset} strokeLinecap="round" transform="rotate(-90 83 83)" style={{ transition:"stroke-dashoffset 0.6s ease" }} />
-        <text x="83" y="77" textAnchor="middle" fill={colors.textPrimary} fontFamily="'JetBrains Mono',monospace" fontSize="28" fontWeight="700">{mins}:{secs}</text>
-        <text x="83" y="98" textAnchor="middle" fill={color} fontFamily="'Geist',sans-serif" fontSize="11" fontWeight="600" letterSpacing="3">{label}</text>
+        <circle cx="83" cy="83" r={r} fill="none" stroke={c.timerTrack} strokeWidth="7" />
+        <circle cx="83" cy="83" r={r} fill="none" stroke={col} strokeWidth="7" strokeDasharray={circ} strokeDashoffset={offset} strokeLinecap="round" transform="rotate(-90 83 83)" style={{ transition:"stroke-dashoffset 0.6s ease" }} />
+        <text x="83" y="77" textAnchor="middle" fill={c.textPrimary} fontFamily="'JetBrains Mono',monospace" fontSize="28" fontWeight="700">{mins}:{secs}</text>
+        <text x="83" y="98" textAnchor="middle" fill={col} fontFamily="'Geist',sans-serif" fontSize="11" fontWeight="600" letterSpacing="3">{label}</text>
       </svg>
     </div>
   );
 }
 
 // ── Charts ────────────────────────────────────────────────────────────────────
-function BarChart({ data, color = colors.green }) {
+function BarChart({ data, color }) {
+  const c = useTheme();
+  const col = color || c.green;
   const max = Math.max(...data.map(d => d.value), 1);
   return (
     <div style={{ display:"flex", alignItems:"flex-end", gap:5, height:64 }}>
       {data.map((d, i) => (
         <div key={i} style={{ flex:1, display:"flex", flexDirection:"column", alignItems:"center", gap:4 }}>
-          <div style={{ width:"100%", borderRadius:4, height:`${(d.value/max)*52}px`, background:d.highlight?color:"#1e1e1e", border:`1px solid ${d.highlight?color:"#2a2a2a"}`, transition:"height 0.4s ease", minHeight:4 }} />
-          <span style={{ fontSize:9, color:colors.textMuted, fontWeight:500 }}>{d.label}</span>
+          <div style={{ width:"100%", borderRadius:4, height:`${(d.value/max)*52}px`, background:d.highlight?col:c.barEmpty, border:`1px solid ${d.highlight?col:c.barBorder}`, transition:"height 0.4s ease", minHeight:4 }} />
+          <span style={{ fontSize:9, color:c.textMuted, fontWeight:500 }}>{d.label}</span>
         </div>
       ))}
     </div>
   );
 }
 
-function Sparkline({ data, color = colors.green, height = 52 }) {
+function Sparkline({ data, color, height = 52 }) {
+  const c = useTheme();
+  const col = color || c.green;
   if (data.length < 2) return null;
   const max = Math.max(...data)||1, min = Math.min(...data);
   const w = 280, h = height;
   const pts = data.map((v,i) => { const x=(i/(data.length-1))*w; const y=h-((v-min)/(max-min||1))*(h-12)-6; return `${x},${y}`; }).join(" ");
   return (
     <svg width="100%" viewBox={`0 0 ${w} ${h}`} preserveAspectRatio="none">
-      <polyline points={pts} fill="none" stroke={color} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
-      {data.map((v,i) => { const x=(i/(data.length-1))*w; const y=h-((v-min)/(max-min||1))*(h-12)-6; return <circle key={i} cx={x} cy={y} r="3.5" fill={color} />; })}
+      <polyline points={pts} fill="none" stroke={col} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
+      {data.map((v,i) => { const x=(i/(data.length-1))*w; const y=h-((v-min)/(max-min||1))*(h-12)-6; return <circle key={i} cx={x} cy={y} r="3.5" fill={col} />; })}
     </svg>
   );
 }
@@ -286,50 +312,106 @@ function WorkoutScreen({ onExit, onComplete, settings, intensity: initIntensity 
   const handleFinish = () => {
     const elapsed = Math.round((Date.now()-sessionStartTime)/60000);
     onComplete({ date: new Date().toLocaleDateString("en-GB",{day:"2-digit",month:"short",year:"numeric"}), exercises: WORKOUT_EXERCISES.length, totalSets: WORKOUT_EXERCISES.length * totalSets, intensity, duration: elapsed, notes: sessionNote });
+    // Don't unmount yet — transition to saved screen first
+    setPhase("saved");
   };
 
-  // ── Session Complete ──
+  // ── SESSION SAVED CELEBRATION SCREEN ──
+  if (phase === "saved") {
+    const elapsed = Math.round((Date.now()-sessionStartTime)/60000);
+    const messages = [
+      "Tendons loaded. Recovery on track.",
+      "Consistency is everything. Nice work.",
+      "Another session banked. Keep going.",
+      "That's how you rebuild. See you tomorrow.",
+      "Pain is temporary. Progress is permanent.",
+    ];
+    const msg = messages[Math.floor(Math.random() * messages.length)];
+    return (
+      <div style={{ position:"fixed", inset:0, background:"#000", zIndex:200, display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"space-between", padding:"64px 28px 52px", overflowY:"auto" }}>
+
+        {/* Top — icon + headline */}
+        <div style={{ flex:1, display:"flex", flexDirection:"column", alignItems:"flex-start", justifyContent:"center", width:"100%", maxWidth:380 }}>
+          <div className="complete-pop" style={{ width:72, height:72, borderRadius:20, background:colors.green, display:"flex", alignItems:"center", justifyContent:"center", marginBottom:28 }}>
+            <Icon name="bolt" size={36} color="#000" />
+          </div>
+          <div style={{ fontSize:13, fontWeight:700, fontFamily:"'Outfit',sans-serif", color:colors.green, letterSpacing:3, marginBottom:12 }}>SESSION COMPLETE</div>
+          <div style={{ fontSize:42, fontWeight:900, fontFamily:"'Outfit',sans-serif", lineHeight:1.05, letterSpacing:-1, marginBottom:16 }}>
+            Great<br />work,<br />Adam.
+          </div>
+          <div style={{ fontSize:15, color:"#666", lineHeight:1.6, marginBottom:36 }}>{msg}</div>
+
+          {/* Stats row */}
+          <div style={{ display:"flex", gap:12, width:"100%", marginBottom:32 }}>
+            {[{ label:"EXERCISES", value:WORKOUT_EXERCISES.length, unit:"done" }, { label:"SETS", value:WORKOUT_EXERCISES.length*totalSets, unit:"total" }, { label:"TIME", value:`${elapsed || 1}`, unit:"mins" }].map((s,i) => (
+              <div key={i} style={{ flex:1, background:"#111", borderRadius:14, padding:"14px 10px", textAlign:"center" }}>
+                <div style={{ fontSize:9, color:"#555", fontWeight:700, fontFamily:"'Outfit',sans-serif", letterSpacing:1.5, marginBottom:6 }}>{s.label}</div>
+                <div className="mono" style={{ fontSize:24, fontWeight:700, color:colors.green }}>{s.value}</div>
+                <div style={{ fontSize:10, color:"#444", marginTop:2 }}>{s.unit}</div>
+              </div>
+            ))}
+          </div>
+
+          {/* Notes */}
+          <div style={{ width:"100%", marginBottom:8 }}>
+            <div style={{ fontSize:11, color:"#555", fontWeight:700, fontFamily:"'Outfit',sans-serif", letterSpacing:1.5, marginBottom:10 }}>SESSION NOTES</div>
+            <textarea value={sessionNote} onChange={e=>setSessionNote(e.target.value)}
+              placeholder="How did it feel? Any tightness, wins, observations…" rows={3}
+              style={{ width:"100%", background:"#111", border:"1px solid #222", borderRadius:12, padding:"12px 14px", fontSize:13, color:"#f2f2f2", lineHeight:1.55, caretColor:colors.green }} />
+          </div>
+        </div>
+
+        {/* Bottom — CTA */}
+        <div style={{ width:"100%", maxWidth:380 }}>
+          <button onClick={onExit} style={{ width:"100%", background:colors.green, color:"#000", border:"none", borderRadius:50, padding:"18px", fontSize:16, fontWeight:900, fontFamily:"'Outfit',sans-serif", cursor:"pointer", letterSpacing:0.3 }}>
+            Back to Home
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  // ── Session Complete (exercise checklist before saving) ──
   if (isSessionDone) {
     const elapsed = Math.round((Date.now()-sessionStartTime)/60000);
     return (
-      <div className="fade-in" style={{ position:"fixed", inset:0, background:colors.bg, zIndex:200, display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", padding:"40px 24px", overflowY:"auto" }}>
-        <div className="complete-pop" style={{ width:80, height:80, borderRadius:"50%", background:colors.green+"18", border:`2px solid ${colors.green}44`, display:"flex", alignItems:"center", justifyContent:"center", marginBottom:20 }}>
-          <Icon name="bolt" size={36} color={colors.green} />
+      <div className="fade-in" style={{ position:"fixed", inset:0, background:"#000", zIndex:200, display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", padding:"40px 24px", overflowY:"auto" }}>
+        <div className="complete-pop" style={{ width:80, height:80, borderRadius:20, background:colors.green, display:"flex", alignItems:"center", justifyContent:"center", marginBottom:24 }}>
+          <Icon name="check" size={38} color="#000" />
         </div>
-        <div style={{ fontSize:30, fontWeight:800, fontFamily:"'Outfit',sans-serif", marginBottom:4 }}>Session Complete</div>
-        <div style={{ fontSize:14, color:colors.textSecondary, marginBottom:28 }}>Great work. Tendons loaded. 💪</div>
+        <div style={{ fontSize:32, fontWeight:900, fontFamily:"'Outfit',sans-serif", marginBottom:6, letterSpacing:-0.5 }}>All done!</div>
+        <div style={{ fontSize:14, color:"#666", marginBottom:32 }}>Review your session below</div>
 
-        <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:10, width:"100%", maxWidth:360, marginBottom:24 }}>
+        <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:10, width:"100%", maxWidth:360, marginBottom:28 }}>
           {[{ label:"EXERCISES", value:WORKOUT_EXERCISES.length, unit:"done" }, { label:"TOTAL SETS", value:WORKOUT_EXERCISES.length*totalSets, unit:"sets" }, { label:"DURATION", value:`~${elapsed}`, unit:"mins" }].map((s,i) => (
-            <div key={i} style={{ background:colors.card, border:`1px solid ${colors.cardBorder}`, borderRadius:14, padding:"13px 8px", textAlign:"center" }}>
-              <div style={{ fontSize:9, color:colors.textSecondary, fontWeight:600, letterSpacing:1.5, marginBottom:4 }}>{s.label}</div>
-              <div className="mono" style={{ fontSize:20, fontWeight:700, fontFamily:"'Outfit',sans-serif", color:colors.green }}>{s.value}</div>
-              <div style={{ fontSize:10, color:colors.textMuted, marginTop:1 }}>{s.unit}</div>
+            <div key={i} style={{ background:"#111", border:"1px solid #222", borderRadius:14, padding:"13px 8px", textAlign:"center" }}>
+              <div style={{ fontSize:9, color:"#555", fontWeight:700, fontFamily:"'Outfit',sans-serif", letterSpacing:1.5, marginBottom:4 }}>{s.label}</div>
+              <div className="mono" style={{ fontSize:20, fontWeight:700, color:colors.green }}>{s.value}</div>
+              <div style={{ fontSize:10, color:"#444", marginTop:1 }}>{s.unit}</div>
             </div>
           ))}
         </div>
 
-        {/* Session note */}
-        <div style={{ width:"100%", maxWidth:360, marginBottom:20 }}>
-          <div style={{ fontSize:12, color:colors.textSecondary, fontWeight:600, marginBottom:8, letterSpacing:0.5 }}>SESSION NOTES (optional)</div>
-          <textarea value={sessionNote} onChange={e=>setSessionNote(e.target.value)} placeholder="How did it feel? Any tightness, wins, observations…" rows={3}
-            style={{ width:"100%", background:"#141414", border:`1px solid ${colors.cardBorder}`, borderRadius:12, padding:"12px 14px", fontSize:13, color:colors.textPrimary, lineHeight:1.5 }} />
-        </div>
-
-        <div style={{ width:"100%", maxWidth:360, marginBottom:24 }}>
+        <div style={{ width:"100%", maxWidth:360, marginBottom:28 }}>
           {WORKOUT_EXERCISES.map((ex,i) => (
-            <div key={i} style={{ display:"flex", alignItems:"center", gap:12, padding:"9px 0", borderBottom:i<WORKOUT_EXERCISES.length-1?`1px solid ${colors.cardBorder}`:"none" }}>
-              <div style={{ width:22, height:22, borderRadius:"50%", background:colors.green+"18", display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0 }}>
+            <div key={i} style={{ display:"flex", alignItems:"center", gap:12, padding:"10px 0", borderBottom:i<WORKOUT_EXERCISES.length-1?"1px solid #1a1a1a":"none" }}>
+              <div style={{ width:22, height:22, borderRadius:"50%", background:colors.green+"22", display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0 }}>
                 <Icon name="check" size={12} color={colors.green} />
               </div>
               <span style={{ fontSize:14, fontWeight:500 }}>{ex.name}</span>
-              <span style={{ marginLeft:"auto", fontSize:12, color:colors.textSecondary }}>{totalSets} sets</span>
+              <span style={{ marginLeft:"auto", fontSize:12, color:"#555" }}>{totalSets} sets</span>
             </div>
           ))}
         </div>
 
-        <button className="btn-primary" onClick={handleFinish} style={{ width:"100%", maxWidth:360, justifyContent:"center" }}>
-          Save & Return
+        <div style={{ width:"100%", maxWidth:360, marginBottom:20 }}>
+          <div style={{ fontSize:11, color:"#555", fontWeight:700, fontFamily:"'Outfit',sans-serif", letterSpacing:1.5, marginBottom:8 }}>SESSION NOTES (optional)</div>
+          <textarea value={sessionNote} onChange={e=>setSessionNote(e.target.value)} placeholder="How did it feel? Any tightness, wins, observations…" rows={3}
+            style={{ width:"100%", background:"#111", border:"1px solid #222", borderRadius:12, padding:"12px 14px", fontSize:13, color:"#f2f2f2", lineHeight:1.5, caretColor:colors.green }} />
+        </div>
+
+        <button onClick={handleFinish} style={{ width:"100%", maxWidth:360, background:colors.green, color:"#000", border:"none", borderRadius:50, padding:"17px", fontSize:16, fontWeight:900, fontFamily:"'Outfit',sans-serif", cursor:"pointer" }}>
+          Save Session
         </button>
       </div>
     );
@@ -564,16 +646,32 @@ function TodayScreen({ painLog, setPainLog, sessionHistory, streak, onStartWorko
   const handleLogCheckIn = () => {
     setCheckedIn(true);
     const lbl = painValue<=3?"Low":painValue<=6?"Moderate":"Severe";
-    setPainLog([...painLog,{ value:painValue, label:lbl, date:new Date().toLocaleDateString("en-GB",{day:"2-digit",month:"short"}) }].slice(-30));
+    setPainLog([...painLog,{ value:painValue, label:lbl, date:new Date().toLocaleDateString("en-GB",{day:"2-digit",month:"short",year:"numeric"}) }].slice(-30));
   };
 
   const handleRestDay = () => {
-    setPainLog([...painLog,{ value:painValue, label:"Rest", date:new Date().toLocaleDateString("en-GB",{day:"2-digit",month:"short"}), restDay:true }].slice(-30));
+    setPainLog([...painLog,{ value:painValue, label:"Rest", date:new Date().toLocaleDateString("en-GB",{day:"2-digit",month:"short",year:"numeric"}), restDay:true }].slice(-30));
     setCheckedIn(true);
   };
 
   return (
     <div className="scroll-area fade-in" style={{ padding:"0 16px 100px" }}>
+
+      {/* Greeting */}
+      {(() => {
+        const h = new Date().getHours();
+        const greeting = h < 12 ? "Good morning" : h < 17 ? "Good afternoon" : "Good evening";
+        return (
+          <div style={{ marginBottom:20, paddingTop:4 }}>
+            <div style={{ fontSize:32, fontWeight:900, fontFamily:"'Outfit',sans-serif", lineHeight:1.1, letterSpacing:-0.5 }}>
+              {greeting},
+            </div>
+            <div style={{ fontSize:32, fontWeight:900, fontFamily:"'Outfit',sans-serif", lineHeight:1.1, letterSpacing:-0.5, color:colors.green }}>
+              Adam.
+            </div>
+          </div>
+        );
+      })()}
 
       {/* Overload prompt */}
       {showOverload && (
@@ -1088,6 +1186,96 @@ function ProfileScreen({ stage, weeksInStage, setStage, setWeeksInStage, setting
   );
 }
 
+// ── APP ROOT ──────────────────────────────────────────────────────────────────
+export default function App() {
+  const [activeTab, setActiveTab]       = useState("today");
+  const [workoutActive, setWorkoutActive] = useState(false);
+  const [isDark, setIsDark]             = useLocalStorage("ryk_darkMode", true);
+
+  const c = isDark ? THEMES.dark : THEMES.light;
+  // Keep module-level alias in sync so any stray references still work
+  colors = c;
+
+  // ── Persisted state ──
+  const [painLog, setPainLog]           = useLocalStorage("ryk_painLog", []);
+  const [sessionHistory, setSessionHistory] = useLocalStorage("ryk_sessions", []);
+  const [stage, setStage]               = useLocalStorage("ryk_stage", "A");
+  const [weeksInStage, setWeeksInStage] = useLocalStorage("ryk_weeks", 1);
+  const [settings, setSettings]         = useLocalStorage("ryk_settings", DEFAULT_SETTINGS);
+  const [intensity, setIntensity]       = useLocalStorage("ryk_intensity", 70);
+  const [appStartDate]                  = useLocalStorage("ryk_startDate", new Date().toISOString());
+  const [stageStartDate, setStageStartDate] = useLocalStorage("ryk_stageStart", new Date().toISOString());
+
+  const streak       = calcStreak(sessionHistory, painLog);
+  const weeksElapsed = Math.max(1, Math.floor((Date.now() - new Date(stageStartDate).getTime()) / (7 * 24 * 60 * 60 * 1000)) + 1);
+  const avgPain      = painLog.length
+    ? parseFloat((painLog.slice(-7).reduce((a,b) => a + b.value, 0) / Math.min(painLog.length, 7)).toFixed(1))
+    : 0;
+
+  const handleSessionComplete = (session) => {
+    setSessionHistory(prev => [...prev, { ...session, id: prev.length + 1 }]);
+    setIntensity(session.intensity);
+    setWorkoutActive(false);
+  };
+  const handleAdvanceStage = (newStage) => {
+    setStage(newStage); setWeeksInStage(1);
+    setStageStartDate(new Date().toISOString()); setActiveTab("protocols");
+  };
+  const handleSetStage = (s) => { setStage(s); setStageStartDate(new Date().toISOString()); };
+  const handleExport   = () => exportCSV(painLog, sessionHistory);
+
+  const tabs = [
+    { id:"today",     label:"TODAY",     icon:"today"     },
+    { id:"trends",    label:"TRENDS",    icon:"trends"    },
+    { id:"protocols", label:"PROTOCOLS", icon:"protocols" },
+    { id:"profile",   label:"PROFILE",   icon:"profile"   },
+  ];
+
+  return (
+    <ThemeContext.Provider value={c}>
+      <style>{makeStyles(c)}</style>
+      <div style={{ maxWidth:420, margin:"0 auto", minHeight:"100vh", background:c.bg, display:"flex", flexDirection:"column", transition:"background 0.3s ease" }}>
+
+        <div style={{ padding:"52px 20px 18px", display:"flex", alignItems:"center", justifyContent:"space-between", flexShrink:0 }}>
+          <div style={{ fontSize:13, fontWeight:700, fontFamily:"'Outfit',sans-serif", letterSpacing:4, color:c.textPrimary }}>REBUILD YOUR KNEE</div>
+          {/* Dark / Light toggle */}
+          <button onClick={() => setIsDark(d => !d)} style={{ width:36, height:36, borderRadius:10, background:c.card, border:`1px solid ${c.cardBorder}`, display:"flex", alignItems:"center", justifyContent:"center", cursor:"pointer", transition:"all 0.2s" }}>
+            <Icon name={isDark ? "sun" : "moon"} size={17} color={c.textSecondary} />
+          </button>
+        </div>
+
+        <div style={{ flex:1, overflow:"hidden" }}>
+          {activeTab==="today"     && <TodayScreen painLog={painLog} setPainLog={setPainLog} sessionHistory={sessionHistory} streak={streak} onStartWorkout={()=>setWorkoutActive(true)} settings={settings} stage={stage} />}
+          {activeTab==="trends"    && <TrendsScreen painLog={painLog} sessionHistory={sessionHistory} onExport={handleExport} />}
+          {activeTab==="protocols" && <ProtocolsScreen stage={stage} weeksInStage={weeksElapsed} avgPain={avgPain} onAdvanceStage={handleAdvanceStage} />}
+          {activeTab==="profile"   && <ProfileScreen stage={stage} weeksInStage={weeksElapsed} setStage={handleSetStage} setWeeksInStage={setWeeksInStage} settings={settings} setSettings={setSettings} sessionHistory={sessionHistory} />}
+        </div>
+
+        <div style={{ position:"fixed", bottom:0, left:"50%", transform:"translateX(-50%)", width:"100%", maxWidth:420, background:c.navBg, borderTop:`1px solid ${c.cardBorder}`, display:"flex", zIndex:100, transition:"background 0.3s ease" }}>
+          {tabs.map(t => {
+            const active = activeTab === t.id;
+            return (
+              <button key={t.id} onClick={() => setActiveTab(t.id)} style={{ flex:1, padding:"12px 0 11px", background:"transparent", border:"none", cursor:"pointer", display:"flex", flexDirection:"column", alignItems:"center", gap:4 }}>
+                <Icon name={t.icon} size={21} color={active ? c.green : c.textSecondary} />
+                <span style={{ fontSize:9, fontWeight:700, fontFamily:"'Outfit',sans-serif", letterSpacing:1.5, color:active ? c.green : c.textSecondary }}>{t.label}</span>
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      {workoutActive && (
+        <WorkoutScreen
+          onExit={() => setWorkoutActive(false)}
+          onComplete={handleSessionComplete}
+          settings={settings}
+          intensity={intensity}
+        />
+      )}
+    </ThemeContext.Provider>
+  );
+}
+
 // ── useLocalStorage hook ──────────────────────────────────────────────────────
 function useLocalStorage(key, initialValue) {
   const [value, setValue] = useState(() => {
@@ -1109,129 +1297,20 @@ function useLocalStorage(key, initialValue) {
 }
 
 // ── Streak calculator ─────────────────────────────────────────────────────────
-// A day counts toward the streak if there's a session OR a logged rest day.
-// Streak breaks if there's a day with no activity (not counting today yet).
 function calcStreak(sessionHistory, painLog) {
-  // Build a Set of all active dates (sessions + rest days)
   const activeDates = new Set();
   sessionHistory.forEach(s => { if (s.date) activeDates.add(s.date); });
   painLog.forEach(p => { if (p.restDay && p.date) activeDates.add(p.date); });
-
   if (activeDates.size === 0) return 0;
-
-  // Walk backwards from today counting consecutive active days
   let streak = 0;
   const today = new Date();
   for (let i = 0; i < 365; i++) {
     const d = new Date(today);
     d.setDate(today.getDate() - i);
-    const label = d.toLocaleDateString("en-GB", { day:"2-digit", month:"short" });
     const fullLabel = d.toLocaleDateString("en-GB", { day:"2-digit", month:"short", year:"numeric" });
-    if (activeDates.has(label) || activeDates.has(fullLabel)) {
-      streak++;
-    } else if (i === 0) {
-      // Today hasn't been logged yet — don't break streak, just skip
-      continue;
-    } else {
-      break; // Gap found — streak ends
-    }
+    if (activeDates.has(fullLabel)) { streak++; }
+    else if (i === 0) { continue; }
+    else { break; }
   }
   return streak;
-}
-
-// ── APP ROOT ──────────────────────────────────────────────────────────────────
-export default function App() {
-  const [activeTab, setActiveTab]       = useState("today");
-  const [workoutActive, setWorkoutActive] = useState(false);
-
-  // ── Persisted state ──
-  const [painLog, setPainLog]           = useLocalStorage("ryk_painLog", []);
-  const [sessionHistory, setSessionHistory] = useLocalStorage("ryk_sessions", []);
-  const [stage, setStage]               = useLocalStorage("ryk_stage", "A");
-  const [weeksInStage, setWeeksInStage] = useLocalStorage("ryk_weeks", 1);
-  const [settings, setSettings]         = useLocalStorage("ryk_settings", DEFAULT_SETTINGS);
-  const [intensity, setIntensity]       = useLocalStorage("ryk_intensity", 70);
-  const [appStartDate]                  = useLocalStorage("ryk_startDate", new Date().toISOString());
-
-  // ── Derived ──
-  const streak = calcStreak(sessionHistory, painLog);
-
-  const avgPain = painLog.length
-    ? parseFloat((painLog.slice(-7).reduce((a,b) => a + b.value, 0) / Math.min(painLog.length, 7)).toFixed(1))
-    : 0;
-
-  // Auto-increment weeksInStage based on real time since stage started
-  // Stored as a start timestamp per stage
-  const [stageStartDate, setStageStartDate] = useLocalStorage("ryk_stageStart", new Date().toISOString());
-  const weeksElapsed = Math.max(1, Math.floor((Date.now() - new Date(stageStartDate).getTime()) / (7 * 24 * 60 * 60 * 1000)) + 1);
-
-  const handleSessionComplete = (session) => {
-    setSessionHistory(prev => [...prev, { ...session, id: prev.length + 1 }]);
-    setIntensity(session.intensity);
-    setWorkoutActive(false);
-  };
-
-  const handleAdvanceStage = (newStage) => {
-    setStage(newStage);
-    setWeeksInStage(1);
-    setStageStartDate(new Date().toISOString());
-    setActiveTab("protocols");
-  };
-
-  const handleSetStage = (s) => {
-    setStage(s);
-    setStageStartDate(new Date().toISOString());
-  };
-
-  const handleExport = () => exportCSV(painLog, sessionHistory);
-
-  const tabs = [
-    { id:"today",     label:"TODAY",     icon:"today"     },
-    { id:"trends",    label:"TRENDS",    icon:"trends"    },
-    { id:"protocols", label:"PROTOCOLS", icon:"protocols" },
-    { id:"profile",   label:"PROFILE",   icon:"profile"   },
-  ];
-
-  return (
-    <>
-      <style>{styles}</style>
-      <div style={{ maxWidth:420, margin:"0 auto", minHeight:"100vh", background:colors.bg, display:"flex", flexDirection:"column" }}>
-
-        <div style={{ padding:"52px 20px 18px", display:"flex", alignItems:"center", justifyContent:"space-between", flexShrink:0 }}>
-          <div style={{ fontSize:13, fontWeight:700, fontFamily:"'Outfit',sans-serif", letterSpacing:4, color:colors.textPrimary }}>REBUILD YOUR KNEE</div>
-          <div style={{ width:34, height:34, borderRadius:9, background:colors.card, border:`1px solid ${colors.cardBorder}`, display:"flex", alignItems:"center", justifyContent:"center", cursor:"pointer" }}>
-            <Icon name="settings" size={16} color={colors.textSecondary} />
-          </div>
-        </div>
-
-        <div style={{ flex:1, overflow:"hidden" }}>
-          {activeTab==="today"     && <TodayScreen painLog={painLog} setPainLog={setPainLog} sessionHistory={sessionHistory} streak={streak} onStartWorkout={()=>setWorkoutActive(true)} settings={settings} stage={stage} />}
-          {activeTab==="trends"    && <TrendsScreen painLog={painLog} sessionHistory={sessionHistory} onExport={handleExport} />}
-          {activeTab==="protocols" && <ProtocolsScreen stage={stage} weeksInStage={weeksElapsed} avgPain={avgPain} onAdvanceStage={handleAdvanceStage} />}
-          {activeTab==="profile"   && <ProfileScreen stage={stage} weeksInStage={weeksElapsed} setStage={handleSetStage} setWeeksInStage={setWeeksInStage} settings={settings} setSettings={setSettings} sessionHistory={sessionHistory} />}
-        </div>
-
-        <div style={{ position:"fixed", bottom:0, left:"50%", transform:"translateX(-50%)", width:"100%", maxWidth:420, background:colors.navBg, borderTop:`1px solid ${colors.cardBorder}`, display:"flex", zIndex:100 }}>
-          {tabs.map(t=>{
-            const active = activeTab===t.id;
-            return (
-              <button key={t.id} onClick={()=>setActiveTab(t.id)} style={{ flex:1, padding:"12px 0 11px", background:"transparent", border:"none", cursor:"pointer", display:"flex", flexDirection:"column", alignItems:"center", gap:4 }}>
-                <Icon name={t.icon} size={21} color={active?colors.green:colors.textSecondary} />
-                <span style={{ fontSize:9, fontWeight:700, fontFamily:"'Outfit',sans-serif", letterSpacing:1.5, color:active?colors.green:colors.textSecondary }}>{t.label}</span>
-              </button>
-            );
-          })}
-        </div>
-      </div>
-
-      {workoutActive && (
-        <WorkoutScreen
-          onExit={()=>setWorkoutActive(false)}
-          onComplete={handleSessionComplete}
-          settings={settings}
-          intensity={intensity}
-        />
-      )}
-    </>
-  );
 }
