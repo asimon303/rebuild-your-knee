@@ -500,19 +500,54 @@ function WorkoutScreen({ onExit, onComplete, settings, intensity: initIntensity 
 
 // ── TODAY SCREEN ──────────────────────────────────────────────────────────────
 function TodayScreen({ painLog, setPainLog, sessionHistory, streak, onStartWorkout, settings, stage }) {
-  const [painValue, setPainValue]   = useState(painLog[painLog.length-1]?.value ?? 2);
-  const [checkedIn, setCheckedIn]   = useState(false);
-  const [nutTimer, setNutTimer]     = useState(3600);
-  const [nutRunning, setNutRunning] = useState(false);
+  const [painValue, setPainValue]     = useState(painLog[painLog.length-1]?.value ?? 2);
+  const [checkedIn, setCheckedIn]     = useState(false);
   const [supplements, setSupplements] = useState([false,false]);
-  const nutRef = useRef(null);
   const supps = ["15g Collagen Peptides","225mg Vitamin C"];
 
+  // Timestamp-based nutrition timer — survives lock screen / backgrounding
+  const DURATION = 3600;
+  const [nutStartedAt, setNutStartedAt] = useState(null); // epoch ms when started
+  const [nutSecondsLeft, setNutSecondsLeft] = useState(DURATION);
+  const nutTickRef = useRef(null);
+
+  // Recalculate remaining time from the stored start timestamp
+  const recalcNut = useCallback(() => {
+    if (!nutStartedAt) return;
+    const elapsed = Math.floor((Date.now() - nutStartedAt) / 1000);
+    const remaining = Math.max(0, DURATION - elapsed);
+    setNutSecondsLeft(remaining);
+    if (remaining === 0) {
+      clearInterval(nutTickRef.current);
+      setNutStartedAt(null);
+    }
+  }, [nutStartedAt]);
+
   useEffect(() => {
-    if (nutRunning&&nutTimer>0) nutRef.current=setInterval(()=>setNutTimer(t=>t-1),1000);
-    else clearInterval(nutRef.current);
-    return ()=>clearInterval(nutRef.current);
-  }, [nutRunning,nutTimer]);
+    if (nutStartedAt) {
+      recalcNut(); // immediate update on mount / resume
+      nutTickRef.current = setInterval(recalcNut, 1000);
+    } else {
+      clearInterval(nutTickRef.current);
+    }
+    return () => clearInterval(nutTickRef.current);
+  }, [nutStartedAt, recalcNut]);
+
+  // Recalculate when app comes back to foreground
+  useEffect(() => {
+    const onVisible = () => { if (nutStartedAt) recalcNut(); };
+    document.addEventListener("visibilitychange", onVisible);
+    return () => document.removeEventListener("visibilitychange", onVisible);
+  }, [nutStartedAt, recalcNut]);
+
+  const handleNutStart  = () => setNutStartedAt(Date.now());
+  const handleNutPause  = () => {
+    // Freeze remaining time, clear start so interval stops
+    setNutSecondsLeft(prev => { setNutStartedAt(null); return prev; });
+  };
+  const handleNutReset  = () => { setNutStartedAt(null); setNutSecondsLeft(DURATION); };
+  const nutRunning = !!nutStartedAt;
+  const nutDone = nutSecondsLeft === 0;
 
   const painColor = painValue<=3?colors.green:painValue<=6?colors.yellow:colors.red;
 
@@ -618,15 +653,23 @@ function TodayScreen({ painLog, setPainLog, sessionHistory, streak, onStartWorko
             <div style={{ fontSize:12, color:colors.textSecondary, marginTop:1 }}>60-min absorption window</div>
           </div>
         </div>
-        <CircularTimer seconds={nutTimer} total={3600} label="PROTOCOL" color={colors.green} />
+        <CircularTimer seconds={nutSecondsLeft} total={DURATION} label={nutDone?"READY!":"PROTOCOL"} color={nutDone?colors.green:nutRunning?colors.green:colors.textSecondary} />
         <div style={{ display:"flex", gap:8, justifyContent:"center", marginBottom:14 }}>
-          <button onClick={()=>setNutRunning(r=>!r)} style={{ background:nutRunning?"#1a1a1a":colors.green, color:nutRunning?colors.textSecondary:"#000", border:`1px solid ${nutRunning?"#2a2a2a":colors.green}`, borderRadius:10, padding:"9px 22px", fontSize:13, fontWeight:600, cursor:"pointer", display:"flex", alignItems:"center", gap:7 }}>
-            <Icon name={nutRunning?"pause":"play"} size={13} color={nutRunning?colors.textSecondary:"#000"} />
-            {nutRunning?"PAUSE":"START"}
-          </button>
-          <button onClick={()=>{setNutTimer(3600);setNutRunning(false);}} style={{ background:"#1a1a1a", border:"1px solid #2a2a2a", borderRadius:10, padding:"9px 14px", cursor:"pointer", display:"flex", alignItems:"center" }}>
-            <Icon name="reset" size={15} color={colors.textSecondary} />
-          </button>
+          {nutDone ? (
+            <button onClick={handleNutReset} style={{ background:colors.green+"18", border:`1px solid ${colors.green}44`, borderRadius:10, padding:"9px 22px", fontSize:13, fontWeight:600, cursor:"pointer", color:colors.green }}>
+              Reset
+            </button>
+          ) : (
+            <>
+              <button onClick={nutRunning?handleNutPause:handleNutStart} style={{ background:nutRunning?"#1a1a1a":colors.green, color:nutRunning?colors.textSecondary:"#000", border:`1px solid ${nutRunning?"#2a2a2a":colors.green}`, borderRadius:10, padding:"9px 22px", fontSize:13, fontWeight:600, cursor:"pointer", display:"flex", alignItems:"center", gap:7 }}>
+                <Icon name={nutRunning?"pause":"play"} size={13} color={nutRunning?colors.textSecondary:"#000"} />
+                {nutRunning?"PAUSE":"START"}
+              </button>
+              <button onClick={handleNutReset} style={{ background:"#1a1a1a", border:"1px solid #2a2a2a", borderRadius:10, padding:"9px 14px", cursor:"pointer", display:"flex", alignItems:"center" }}>
+                <Icon name="reset" size={15} color={colors.textSecondary} />
+              </button>
+            </>
+          )}
         </div>
         {supps.map((s,i)=>(
           <div key={i} onClick={()=>setSupplements(p=>p.map((v,j)=>j===i?!v:v))} style={{ display:"flex", alignItems:"center", gap:12, padding:"11px 13px", borderRadius:10, background:"#0e0e0e", border:`1px solid ${supplements[i]?colors.green+"33":"#1e1e1e"}`, marginBottom:8, cursor:"pointer", transition:"border-color 0.2s" }}>
