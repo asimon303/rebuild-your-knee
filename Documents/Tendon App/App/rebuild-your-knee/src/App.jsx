@@ -1045,26 +1045,82 @@ function ProfileScreen({ stage, weeksInStage, setStage, setWeeksInStage, setting
   );
 }
 
+// ── useLocalStorage hook ──────────────────────────────────────────────────────
+function useLocalStorage(key, initialValue) {
+  const [value, setValue] = useState(() => {
+    try {
+      const stored = localStorage.getItem(key);
+      return stored ? JSON.parse(stored) : initialValue;
+    } catch {
+      return initialValue;
+    }
+  });
+  const setStored = useCallback((newValue) => {
+    setValue(prev => {
+      const next = typeof newValue === "function" ? newValue(prev) : newValue;
+      try { localStorage.setItem(key, JSON.stringify(next)); } catch {}
+      return next;
+    });
+  }, [key]);
+  return [value, setStored];
+}
+
+// ── Streak calculator ─────────────────────────────────────────────────────────
+// A day counts toward the streak if there's a session OR a logged rest day.
+// Streak breaks if there's a day with no activity (not counting today yet).
+function calcStreak(sessionHistory, painLog) {
+  // Build a Set of all active dates (sessions + rest days)
+  const activeDates = new Set();
+  sessionHistory.forEach(s => { if (s.date) activeDates.add(s.date); });
+  painLog.forEach(p => { if (p.restDay && p.date) activeDates.add(p.date); });
+
+  if (activeDates.size === 0) return 0;
+
+  // Walk backwards from today counting consecutive active days
+  let streak = 0;
+  const today = new Date();
+  for (let i = 0; i < 365; i++) {
+    const d = new Date(today);
+    d.setDate(today.getDate() - i);
+    const label = d.toLocaleDateString("en-GB", { day:"2-digit", month:"short" });
+    const fullLabel = d.toLocaleDateString("en-GB", { day:"2-digit", month:"short", year:"numeric" });
+    if (activeDates.has(label) || activeDates.has(fullLabel)) {
+      streak++;
+    } else if (i === 0) {
+      // Today hasn't been logged yet — don't break streak, just skip
+      continue;
+    } else {
+      break; // Gap found — streak ends
+    }
+  }
+  return streak;
+}
+
 // ── APP ROOT ──────────────────────────────────────────────────────────────────
 export default function App() {
-  const [activeTab, setActiveTab]         = useState("today");
+  const [activeTab, setActiveTab]       = useState("today");
   const [workoutActive, setWorkoutActive] = useState(false);
-  const [painLog, setPainLog]             = useState([
-    { value:3, label:"Low",      date:"01 Jan" },
-    { value:4, label:"Moderate", date:"02 Jan" },
-    { value:2, label:"Low",      date:"03 Jan" },
-    { value:2, label:"Low",      date:"04 Jan" },
-  ]);
-  const [sessionHistory, setSessionHistory] = useState([]);
-  const [stage, setStage]                 = useState("A");
-  const [weeksInStage, setWeeksInStage]   = useState(3);
-  const [settings, setSettings]           = useState(DEFAULT_SETTINGS);
-  const [intensity, setIntensity]         = useState(70);
-  const streak = sessionHistory.length + 14; // seeded base
+
+  // ── Persisted state ──
+  const [painLog, setPainLog]           = useLocalStorage("ryk_painLog", []);
+  const [sessionHistory, setSessionHistory] = useLocalStorage("ryk_sessions", []);
+  const [stage, setStage]               = useLocalStorage("ryk_stage", "A");
+  const [weeksInStage, setWeeksInStage] = useLocalStorage("ryk_weeks", 1);
+  const [settings, setSettings]         = useLocalStorage("ryk_settings", DEFAULT_SETTINGS);
+  const [intensity, setIntensity]       = useLocalStorage("ryk_intensity", 70);
+  const [appStartDate]                  = useLocalStorage("ryk_startDate", new Date().toISOString());
+
+  // ── Derived ──
+  const streak = calcStreak(sessionHistory, painLog);
 
   const avgPain = painLog.length
-    ? parseFloat((painLog.slice(-7).reduce((a,b)=>a+b.value,0)/Math.min(painLog.length,7)).toFixed(1))
+    ? parseFloat((painLog.slice(-7).reduce((a,b) => a + b.value, 0) / Math.min(painLog.length, 7)).toFixed(1))
     : 0;
+
+  // Auto-increment weeksInStage based on real time since stage started
+  // Stored as a start timestamp per stage
+  const [stageStartDate, setStageStartDate] = useLocalStorage("ryk_stageStart", new Date().toISOString());
+  const weeksElapsed = Math.max(1, Math.floor((Date.now() - new Date(stageStartDate).getTime()) / (7 * 24 * 60 * 60 * 1000)) + 1);
 
   const handleSessionComplete = (session) => {
     setSessionHistory(prev => [...prev, { ...session, id: prev.length + 1 }]);
@@ -1075,7 +1131,13 @@ export default function App() {
   const handleAdvanceStage = (newStage) => {
     setStage(newStage);
     setWeeksInStage(1);
+    setStageStartDate(new Date().toISOString());
     setActiveTab("protocols");
+  };
+
+  const handleSetStage = (s) => {
+    setStage(s);
+    setStageStartDate(new Date().toISOString());
   };
 
   const handleExport = () => exportCSV(painLog, sessionHistory);
@@ -1102,8 +1164,8 @@ export default function App() {
         <div style={{ flex:1, overflow:"hidden" }}>
           {activeTab==="today"     && <TodayScreen painLog={painLog} setPainLog={setPainLog} sessionHistory={sessionHistory} streak={streak} onStartWorkout={()=>setWorkoutActive(true)} settings={settings} stage={stage} />}
           {activeTab==="trends"    && <TrendsScreen painLog={painLog} sessionHistory={sessionHistory} onExport={handleExport} />}
-          {activeTab==="protocols" && <ProtocolsScreen stage={stage} weeksInStage={weeksInStage} avgPain={avgPain} onAdvanceStage={handleAdvanceStage} />}
-          {activeTab==="profile"   && <ProfileScreen stage={stage} weeksInStage={weeksInStage} setStage={setStage} setWeeksInStage={setWeeksInStage} settings={settings} setSettings={setSettings} sessionHistory={sessionHistory} />}
+          {activeTab==="protocols" && <ProtocolsScreen stage={stage} weeksInStage={weeksElapsed} avgPain={avgPain} onAdvanceStage={handleAdvanceStage} />}
+          {activeTab==="profile"   && <ProfileScreen stage={stage} weeksInStage={weeksElapsed} setStage={handleSetStage} setWeeksInStage={setWeeksInStage} settings={settings} setSettings={setSettings} sessionHistory={sessionHistory} />}
         </div>
 
         <div style={{ position:"fixed", bottom:0, left:"50%", transform:"translateX(-50%)", width:"100%", maxWidth:420, background:colors.navBg, borderTop:`1px solid ${colors.cardBorder}`, display:"flex", zIndex:100 }}>
