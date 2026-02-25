@@ -613,10 +613,10 @@ function WorkoutScreen({ onExit, onComplete, settings, intensity: initIntensity,
   }
 
   return (
-    <div style={{ position:"fixed", inset:0, background:"#000", zIndex:200, display:"flex", flexDirection:"column" }}>
+    <div style={{ position:"fixed", inset:0, background:"#000", zIndex:200, display:"flex", flexDirection:"column", overflowY:"auto" }}>
 
       {/* Top bar */}
-      <div style={{ padding:"52px 20px 0", flexShrink:0 }}>
+      <div style={{ padding:"44px 20px 0", flexShrink:0 }}>
         {/* Motivational headline */}
         <div key={phase} className="fade-in" style={{ marginBottom:18, minHeight:36 }}>
           {(isHold||isIdle) && (
@@ -694,7 +694,7 @@ function WorkoutScreen({ onExit, onComplete, settings, intensity: initIntensity,
             </div>
 
             {/* Thick glowing ring */}
-            <div style={{ position:"relative", marginBottom:10 }}>
+            <div style={{ position:"relative", marginBottom:6 }}>
               <svg width="230" height="230" viewBox="0 0 240 240" style={{ filter: !isIdle ? `drop-shadow(0 0 18px ${ringColor}88)` : "none", transition:"filter 0.4s ease" }}>
                 <circle cx="120" cy="120" r={r} fill="none" stroke="#111" strokeWidth="14" />
                 {!isIdle && (
@@ -716,7 +716,7 @@ function WorkoutScreen({ onExit, onComplete, settings, intensity: initIntensity,
             </div>
 
             {/* Cue text */}
-            <div style={{ fontSize:13, color:THEMES.dark.textSecondary, textAlign:"center", marginBottom:24, padding:"0 20px", lineHeight:1.55 }}>
+            <div style={{ fontSize:13, color:THEMES.dark.textSecondary, textAlign:"center", marginBottom:16, padding:"0 20px", lineHeight:1.55 }}>
               {isIdle ? `Set ${completedSets+1} of ${totalSets} — ${exercise.cue}`
                       : isHold ? `Set ${completedSets+1} of ${totalSets} — hold it steady`
                                 : `Recover · Set ${completedSets+1} of ${totalSets} coming up`}
@@ -728,10 +728,7 @@ function WorkoutScreen({ onExit, onComplete, settings, intensity: initIntensity,
                 <div className="fade-in" style={{ width:"100%", maxWidth:340 }}>
                   <div style={{ background:"#111", border:"1px solid #222", borderRadius:16, padding:"16px", marginBottom:12, textAlign:"center" }}>
                     <div style={{ fontSize:13, fontWeight:800, fontFamily:"'Outfit',sans-serif", color:THEMES.dark.green, letterSpacing:1, marginBottom:6 }}>EFFORT CHECK</div>
-                    <div style={{ fontSize:14, fontWeight:600, marginBottom:6 }}>Are you working at ~70% of your max effort?</div>
-                    <div style={{ fontSize:12, color:THEMES.dark.textSecondary, lineHeight:1.55 }}>
-                      Barely trying won't stimulate tendon remodelling. You should feel significant discomfort — not pain, but challenge.
-                    </div>
+                    <div style={{ fontSize:14, fontWeight:600 }}>Are you working at ~70% of your max effort?</div>
                   </div>
                   <div style={{ display:"flex", gap:10 }}>
                     <button onClick={()=>{ setIntensity(i => Math.min(i, 65)); setConfirmedEffort(true); }} style={{ flex:1, background:"#111", border:"1px solid #333", borderRadius:50, padding:"14px", fontSize:13, fontWeight:700, color:THEMES.dark.textSecondary, cursor:"pointer" }}>
@@ -770,7 +767,7 @@ function WorkoutScreen({ onExit, onComplete, settings, intensity: initIntensity,
       </div>
 
       {/* End Workout */}
-      <div style={{ padding:"0 24px 40px", flexShrink:0 }}>
+      <div style={{ padding:"0 24px 28px", flexShrink:0 }}>
         {showExit ? (
           <div className="fade-in-fast" style={{ background:c.surface, border:`1px solid ${c.cardBorder}`, borderRadius:18, padding:"18px", textAlign:"center" }}>
             <div style={{ fontSize:14, fontWeight:700, fontFamily:"'Outfit',sans-serif", marginBottom:3 }}>End this workout?</div>
