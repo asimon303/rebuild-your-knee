@@ -343,6 +343,8 @@ function WorkoutScreen({ onExit, onComplete, settings, intensity: initIntensity,
   const [intensity, setIntensity]       = useState(initIntensity);
   const [sessionStartTime]              = useState(Date.now());
 
+  const c = THEMES.dark; // Workout screen is always dark regardless of app theme
+
   const timerRef  = useRef(null);
   const phaseRef  = useRef(phase);
   const setsRef   = useRef(completedSets);
@@ -395,7 +397,7 @@ function WorkoutScreen({ onExit, onComplete, settings, intensity: initIntensity,
   // Show effort confirmation before first hold of the session
   const showEffortPrompt = isIdle && exIdx === 0 && completedSets === 0 && !confirmedEffort;
 
-  function handleStart() { setPhase("hold"); setTimeLeft(holdSecs); setIsRunning(true); }
+  const handleStart    = () => { setPhase("hold"); setTimeLeft(holdSecs); setIsRunning(true); };
   const handlePause    = () => setIsRunning(r => !r);
   const handleResetSet = () => { clearInterval(timerRef.current); setIsRunning(false); setPhase("idle"); setTimeLeft(holdSecs); };
   const handleNextEx   = () => {
@@ -1099,18 +1101,27 @@ function TodayScreen({ painLog, setPainLog, sessionHistory, streak, onStartWorko
         </button>
       </div>
 
-      {/* Ice Timer — appears after completing a session today */}
-      {sessionToday && (
-        <div className="card fade-in">
-          <div style={{ display:"flex", alignItems:"center", gap:12, marginBottom:16 }}>
-            <div style={{ width:38, height:38, borderRadius:10, background:"#e0f4ff22", border:`1px solid #38bdf833`, display:"flex", alignItems:"center", justifyContent:"center", fontSize:20 }}>
-              🧊
-            </div>
-            <div>
-              <div style={{ fontSize:16, fontWeight:700, fontFamily:"'Outfit',sans-serif" }}>Post-Workout Ice</div>
-              <div style={{ fontSize:12, color:c.textSecondary, marginTop:1 }}>Apply ice to front of knee · 10 min</div>
-            </div>
+      {/* Streak */}
+      <div className="card" style={{ background:c.streakBg, border:`1px solid ${c.green}33`, position:"relative", overflow:"hidden" }}>
+        <div style={{ position:"absolute", bottom:-24, right:-10, opacity:0.06 }}><Icon name="fire" size={130} color={c.green} /></div>
+        <div style={{ fontSize:10, color:c.green, fontWeight:600, letterSpacing:3, marginBottom:8 }}>DAILY STREAK</div>
+        <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between" }}>
+          <div style={{ fontSize:30, fontWeight:800, fontFamily:"'Outfit',sans-serif", lineHeight:1.15, color:c.streakText }}>{streak}-Day Streak<br />Active</div>
+          <div style={{ width:46, height:46, borderRadius:"50%", background:c.green, display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0 }}><Icon name="bolt" size={22} color="#000" /></div>
+        </div>
+      </div>
+
+      {/* Ice Timer — always visible at bottom of Today screen */}
+      <div className="card">
+        <div style={{ display:"flex", alignItems:"center", gap:12, marginBottom:16 }}>
+          <div style={{ width:38, height:38, borderRadius:10, background:"#e0f4ff22", border:`1px solid #38bdf833`, display:"flex", alignItems:"center", justifyContent:"center", fontSize:20 }}>
+            🧊
           </div>
+          <div>
+            <div style={{ fontSize:16, fontWeight:700, fontFamily:"'Outfit',sans-serif" }}>Post-Workout Ice</div>
+            <div style={{ fontSize:12, color:c.textSecondary, marginTop:1 }}>Apply ice to front of knee · 10 min</div>
+          </div>
+        </div>
 
           {iceDone ? (
             <div style={{ display:"flex", alignItems:"center", gap:10, background:c.green+"11", border:`1px solid ${c.green}33`, borderRadius:12, padding:"14px 16px" }}>
@@ -1144,17 +1155,6 @@ function TodayScreen({ painLog, setPainLog, sessionHistory, streak, onStartWorko
             </>
           )}
         </div>
-      )}
-
-      {/* Streak */}
-      <div className="card" style={{ background:c.streakBg, border:`1px solid ${c.green}33`, position:"relative", overflow:"hidden" }}>
-        <div style={{ position:"absolute", bottom:-24, right:-10, opacity:0.06 }}><Icon name="fire" size={130} color={c.green} /></div>
-        <div style={{ fontSize:10, color:c.green, fontWeight:600, letterSpacing:3, marginBottom:8 }}>DAILY STREAK</div>
-        <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between" }}>
-          <div style={{ fontSize:30, fontWeight:800, fontFamily:"'Outfit',sans-serif", lineHeight:1.15, color:c.streakText }}>{streak}-Day Streak<br />Active</div>
-          <div style={{ width:46, height:46, borderRadius:"50%", background:c.green, display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0 }}><Icon name="bolt" size={22} color="#000" /></div>
-        </div>
-      </div>
     </div>
   );
 }
@@ -1422,7 +1422,7 @@ function ProtocolsScreen({ stage, weeksInStage, avgPain, onAdvanceStage }) {
         <div style={{ fontSize:9, fontWeight:700, fontFamily:"'Outfit',sans-serif", letterSpacing:3, color:c.orange, marginBottom:6 }}>SCIENTIFIC MASTERCLASS</div>
         <div style={{ fontSize:24, fontWeight:900, fontFamily:"'Outfit',sans-serif", color:c.orange, marginBottom:8, letterSpacing:-0.5 }}>The Baar Protocol</div>
         <div style={{ fontSize:13, color:"#c9b08a", lineHeight:1.6, marginBottom:16 }}>15g Collagen + Vitamin C timing. Consume 60 minutes prior to exercise for optimal tendon synthesis.</div>
-        <a href="https://pubmed.ncbi.nlm.nih.gov/28253282/" target="_blank" rel="noopener noreferrer" style={{ display:"inline-flex", alignItems:"center", gap:8, background:c.orange, color:"#000", border:"none", borderRadius:50, padding:"12px 24px", fontSize:13, fontWeight:800, fontFamily:"'Outfit',sans-serif", cursor:"pointer", textDecoration:"none", letterSpacing:0.3 }}>
+        <a href="https://biology.ucdavis.edu/news/how-our-muscles-tendons-and-ligaments-respond-exercise-and-recover-injury" target="_blank" rel="noopener noreferrer" style={{ display:"inline-flex", alignItems:"center", gap:8, background:c.orange, color:"#000", border:"none", borderRadius:50, padding:"12px 24px", fontSize:13, fontWeight:800, fontFamily:"'Outfit',sans-serif", cursor:"pointer", textDecoration:"none", letterSpacing:0.3 }}>
           READ SCIENCE ↗
         </a>
       </div>
