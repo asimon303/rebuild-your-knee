@@ -394,6 +394,11 @@ function WorkoutScreen({ onExit, onComplete, settings, intensity: initIntensity,
 
   const [confirmedEffort, setConfirmedEffort] = useState(false);
 
+  // ── Must be declared here (before any early returns) to satisfy Rules of Hooks ──
+  const holdHeadlines = ["THIS SHOULD BE DIFFICULT","FEEL THE BURN","DON'T YOU DARE QUIT","LOCK IT IN","EMBRACE THE DISCOMFORT"];
+  const restHeadlines = ["SHAKE IT OFF","YOU EARNED THIS","BREATHE. RESET.","STAY LOOSE","NEXT SET INCOMING"];
+  const [headlineIdx] = useState(() => Math.floor(Math.random() * holdHeadlines.length));
+
   // Show effort confirmation before first hold of the session
   const showEffortPrompt = isIdle && exIdx === 0 && completedSets === 0 && !confirmedEffort;
 
@@ -424,7 +429,7 @@ function WorkoutScreen({ onExit, onComplete, settings, intensity: initIntensity,
             <div style={{ fontSize:11, fontWeight:700, fontFamily:"'Outfit',sans-serif", color:THEMES.dark.textSecondary, letterSpacing:3 }}>WARM-UP</div>
             <div style={{ fontSize:20, fontWeight:800, fontFamily:"'Outfit',sans-serif", marginTop:2 }}>Stretching &amp; Activation</div>
           </div>
-          <button onClick={()=>setShowExit(true)} style={{ background:"transparent", border:`1px solid #333`, borderRadius:10, padding:"8px 14px", fontSize:12, fontWeight:600, color:THEMES.dark.textSecondary, cursor:"pointer" }}>Skip</button>
+          <button onClick={onExit} style={{ background:"transparent", border:`1px solid #333`, borderRadius:10, padding:"8px 14px", fontSize:12, fontWeight:600, color:THEMES.dark.textSecondary, cursor:"pointer" }}>Back</button>
         </div>
 
         {/* Step dots */}
@@ -606,11 +611,6 @@ function WorkoutScreen({ onExit, onComplete, settings, intensity: initIntensity,
       </div>
     );
   }
-
-  // Motivational headlines
-  const holdHeadlines = ["THIS SHOULD BE DIFFICULT","FEEL THE BURN","DON'T YOU DARE QUIT","LOCK IT IN","EMBRACE THE DISCOMFORT"];
-  const restHeadlines = ["SHAKE IT OFF","YOU EARNED THIS","BREATHE. RESET.","STAY LOOSE","NEXT SET INCOMING"];
-  const [headlineIdx] = useState(() => Math.floor(Math.random() * holdHeadlines.length));
 
   return (
     <div style={{ position:"fixed", inset:0, background:"#000", zIndex:200, display:"flex", flexDirection:"column" }}>
