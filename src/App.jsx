@@ -615,34 +615,44 @@ function WorkoutScreen({ onExit, onComplete, settings, intensity: initIntensity,
   return (
     <div style={{ position:"fixed", inset:0, background:"#000", zIndex:200, display:"flex", flexDirection:"column" }}>
 
-      {/* Top bar — app title + settings icon */}
+      {/* Top bar */}
       <div style={{ padding:"52px 20px 0", display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0, position:"relative" }}>
         <div style={{ fontSize:13, fontWeight:700, fontFamily:"'Outfit',sans-serif", letterSpacing:4, color:"#f2f2f2" }}>REBUILD YOUR KNEE</div>
-        <div style={{ position:"absolute", right:20, width:36, height:36, borderRadius:10, display:"flex", alignItems:"center", justifyContent:"center" }}>
+        <div style={{ position:"absolute", right:20 }}>
           <Icon name="settings" size={22} color={THEMES.dark.green} />
         </div>
       </div>
 
-      {/* Motivational headline — centered */}
-      <div key={phase} className="fade-in" style={{ padding:"18px 24px 0", textAlign:"center", flexShrink:0, minHeight:54 }}>
-        {(isHold||isIdle) && (
-          <div style={{ fontSize:22, fontWeight:900, fontFamily:"'Outfit',sans-serif", letterSpacing:-0.3, lineHeight:1.1, textAlign:"center" }}>
-            <span style={{ color:THEMES.dark.green }}>{holdHeadlines[headlineIdx].split(" ").slice(0,-1).join(" ")} </span>
-            <span style={{ color:THEMES.dark.green, fontStyle:"italic", fontWeight:900 }}>{holdHeadlines[headlineIdx].split(" ").slice(-1)[0]}</span>
-          </div>
-        )}
-        {isRest && (
-          <div style={{ fontSize:22, fontWeight:900, fontFamily:"'Outfit',sans-serif", letterSpacing:-0.3, color:THEMES.dark.blue, textAlign:"center" }}>{restHeadlines[headlineIdx]}</div>
-        )}
-        {isExDone && (
-          <div style={{ fontSize:22, fontWeight:900, fontFamily:"'Outfit',sans-serif", color:THEMES.dark.green, textAlign:"center" }}>EXERCISE DONE 🔥</div>
-        )}
+      {/* Phase badge + headline */}
+      <div style={{ padding:"16px 24px 0", textAlign:"center", flexShrink:0 }}>
+        <div style={{ display:"inline-block", border:`1.5px solid ${THEMES.dark.green}`, borderRadius:50, padding:"5px 18px", fontSize:11, fontWeight:800, fontFamily:"'Outfit',sans-serif", letterSpacing:2, color:THEMES.dark.green, marginBottom:10 }}>
+          PHASE {stage}
+        </div>
+        <div key={phase} className="fade-in" style={{ minHeight:32 }}>
+          {(isHold||isIdle) && (
+            <div style={{ fontSize:22, fontWeight:900, fontFamily:"'Outfit',sans-serif", letterSpacing:-0.3, lineHeight:1.1, textAlign:"center" }}>
+              <span style={{ color:THEMES.dark.green }}>{holdHeadlines[headlineIdx].split(" ").slice(0,-1).join(" ")} </span>
+              <span style={{ color:THEMES.dark.green, fontStyle:"italic", fontWeight:900 }}>{holdHeadlines[headlineIdx].split(" ").slice(-1)[0]}</span>
+            </div>
+          )}
+          {isRest && <div style={{ fontSize:22, fontWeight:900, fontFamily:"'Outfit',sans-serif", color:THEMES.dark.blue }}>{restHeadlines[headlineIdx]}</div>}
+          {isExDone && <div style={{ fontSize:22, fontWeight:900, fontFamily:"'Outfit',sans-serif", color:THEMES.dark.green }}>EXERCISE DONE 🔥</div>}
+        </div>
       </div>
 
-      {/* Exercise label + progress segments */}
+      {/* Exercise label + SKIP + progress bar */}
       <div style={{ padding:"14px 20px 0", flexShrink:0 }}>
-        <div style={{ fontSize:10, color:THEMES.dark.textSecondary, fontWeight:600, letterSpacing:2, marginBottom:3 }}>EXERCISE {exIdx+1} OF {WORKOUT_EXERCISES.length}</div>
-        <div key={exIdx} className="slide-in-right" style={{ fontSize:26, fontWeight:800, fontFamily:"'Outfit',sans-serif", lineHeight:1.1, marginBottom:12 }}>{exercise.name}</div>
+        <div style={{ display:"flex", alignItems:"flex-start", justifyContent:"space-between", marginBottom:10 }}>
+          <div>
+            <div style={{ fontSize:10, color:THEMES.dark.textSecondary, fontWeight:600, letterSpacing:2, marginBottom:2 }}>EXERCISE {exIdx+1} OF {WORKOUT_EXERCISES.length}</div>
+            <div key={exIdx} className="slide-in-right" style={{ fontSize:24, fontWeight:800, fontFamily:"'Outfit',sans-serif", lineHeight:1.1 }}>{exercise.name}</div>
+          </div>
+          {!isLastEx && (
+            <button onClick={handleNextEx} style={{ background:"transparent", border:`1.5px solid #333`, borderRadius:50, padding:"7px 16px", fontSize:11, fontWeight:700, fontFamily:"'Outfit',sans-serif", color:THEMES.dark.textSecondary, cursor:"pointer", letterSpacing:1.5, flexShrink:0, marginTop:4 }}>
+              SKIP
+            </button>
+          )}
+        </div>
         <div style={{ display:"flex", gap:6 }}>
           {WORKOUT_EXERCISES.map((_,i) => (
             <div key={i} style={{ flex:1, height:3, borderRadius:2, background:i<exIdx?THEMES.dark.green:i===exIdx?(isExDone?THEMES.dark.green:THEMES.dark.green+"55"):"#222", transition:"background 0.4s ease" }} />
@@ -651,22 +661,21 @@ function WorkoutScreen({ onExit, onComplete, settings, intensity: initIntensity,
       </div>
 
       {/* Main content */}
-      <div style={{ flex:1, display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", padding:"0 24px", minHeight:0 }}>
+      <div style={{ flex:1, display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", padding:"0 24px" }}>
         {isExDone ? (
           <div className="fade-in" style={{ display:"flex", flexDirection:"column", alignItems:"center", textAlign:"center", width:"100%" }}>
-            <div className="complete-pop" style={{ width:90, height:90, borderRadius:"50%", background:THEMES.dark.green+"18", border:`2px solid ${THEMES.dark.green}55`, display:"flex", alignItems:"center", justifyContent:"center", marginBottom:18, boxShadow:`0 0 40px ${THEMES.dark.green}33` }}>
-              <Icon name="check" size={40} color={THEMES.dark.green} />
+            <div className="complete-pop" style={{ width:80, height:80, borderRadius:"50%", background:THEMES.dark.green+"18", border:`2px solid ${THEMES.dark.green}55`, display:"flex", alignItems:"center", justifyContent:"center", marginBottom:16, boxShadow:`0 0 40px ${THEMES.dark.green}33` }}>
+              <Icon name="check" size={36} color={THEMES.dark.green} />
             </div>
-            <div style={{ fontSize:24, fontWeight:800, fontFamily:"'Outfit',sans-serif", marginBottom:4 }}>{exercise.name}</div>
-            <div style={{ fontSize:13, color:THEMES.dark.green, fontWeight:600, marginBottom:24, letterSpacing:1 }}>{totalSets} SETS COMPLETE</div>
+            <div style={{ fontSize:22, fontWeight:800, fontFamily:"'Outfit',sans-serif", marginBottom:4 }}>{exercise.name}</div>
+            <div style={{ fontSize:13, color:THEMES.dark.green, fontWeight:600, marginBottom:20, letterSpacing:1 }}>{totalSets} SETS COMPLETE</div>
             {!isLastEx && (
-              <div style={{ background:c.surface, border:`1px solid #222`, borderRadius:16, padding:"14px 20px", marginBottom:24, width:"100%", maxWidth:320 }}>
-                <div style={{ fontSize:10, color:THEMES.dark.textSecondary, fontWeight:600, letterSpacing:2, marginBottom:5 }}>NEXT UP</div>
-                <div style={{ fontSize:17, fontWeight:700, fontFamily:"'Outfit',sans-serif" }}>{WORKOUT_EXERCISES[exIdx+1].name}</div>
-                <div style={{ fontSize:12, color:THEMES.dark.textSecondary, marginTop:3 }}>{WORKOUT_EXERCISES[exIdx+1].cue}</div>
+              <div style={{ background:"#111", border:`1px solid #222`, borderRadius:14, padding:"12px 18px", marginBottom:20, width:"100%", maxWidth:320 }}>
+                <div style={{ fontSize:10, color:THEMES.dark.textSecondary, fontWeight:600, letterSpacing:2, marginBottom:4 }}>NEXT UP</div>
+                <div style={{ fontSize:16, fontWeight:700, fontFamily:"'Outfit',sans-serif" }}>{WORKOUT_EXERCISES[exIdx+1].name}</div>
               </div>
             )}
-            <button onClick={handleNextEx} style={{ width:"100%", maxWidth:340, background:THEMES.dark.green, color:"#000", border:"none", borderRadius:50, padding:"17px", fontSize:16, fontWeight:800, fontFamily:"'Outfit',sans-serif", cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center", gap:10 }}>
+            <button onClick={handleNextEx} style={{ width:"100%", maxWidth:360, background:THEMES.dark.green, color:"#000", border:"none", borderRadius:50, padding:"17px", fontSize:16, fontWeight:800, fontFamily:"'Outfit',sans-serif", cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center", gap:10 }}>
               {isLastEx ? "Finish Session" : `Start ${WORKOUT_EXERCISES[exIdx+1].name}`}
               <Icon name="arrow" size={18} color="#000" />
             </button>
@@ -674,24 +683,14 @@ function WorkoutScreen({ onExit, onComplete, settings, intensity: initIntensity,
         ) : (
           <>
             {/* Set tiles */}
-            <div style={{ textAlign:"center", marginBottom:16 }}>
+            <div style={{ textAlign:"center", marginBottom:14 }}>
               <div style={{ fontSize:10, color:THEMES.dark.textSecondary, fontWeight:600, letterSpacing:2.5, marginBottom:10 }}>SETS COMPLETED</div>
               <div style={{ display:"flex", alignItems:"center", justifyContent:"center", gap:10 }}>
                 {Array.from({ length: totalSets }).map((_,i) => {
-                  const done   = i < completedSets;
-                  const active = (isHold||isRest) && i===completedSets;
+                  const done = i < completedSets;
                   return (
-                    <div key={i} style={{
-                      width:56, height:56, borderRadius:14,
-                      background: done ? THEMES.dark.green : "#111",
-                      border: `1.5px solid ${done ? THEMES.dark.green : active ? ringColor : "#2a2a2a"}`,
-                      display:"flex", alignItems:"center", justifyContent:"center",
-                      transition:"all 0.35s ease",
-                      boxShadow: done ? `0 0 14px ${THEMES.dark.green}55` : "none",
-                    }}>
-                      <span style={{ fontSize:18, fontWeight:800, fontFamily:"'Outfit',sans-serif", color: done ? "#000" : THEMES.dark.textSecondary }}>
-                        {i+1}
-                      </span>
+                    <div key={i} style={{ width:56, height:56, borderRadius:14, background:done?THEMES.dark.green:"#111", border:`1.5px solid ${done?THEMES.dark.green:"#2a2a2a"}`, display:"flex", alignItems:"center", justifyContent:"center", transition:"all 0.35s ease", boxShadow:done?`0 0 14px ${THEMES.dark.green}55`:"none" }}>
+                      <span style={{ fontSize:18, fontWeight:800, fontFamily:"'Outfit',sans-serif", color:done?"#000":THEMES.dark.textSecondary }}>{i+1}</span>
                     </div>
                   );
                 })}
@@ -700,45 +699,32 @@ function WorkoutScreen({ onExit, onComplete, settings, intensity: initIntensity,
 
             {/* Glowing ring */}
             <div style={{ position:"relative", marginBottom:8 }}>
-              {/* Background glow blob */}
-              <div style={{
-                position:"absolute", inset:-40,
-                background: isIdle ? "transparent" : `radial-gradient(circle, ${ringColor}33 0%, transparent 70%)`,
-                borderRadius:"50%",
-                transition:"background 0.4s ease",
-                pointerEvents:"none",
-              }} />
-              <svg width="220" height="220" viewBox="0 0 240 240">
-                <circle cx="120" cy="120" r={r} fill="none" stroke="#1a1a1a" strokeWidth="12" />
-                {!isIdle && (
-                  <circle cx="120" cy="120" r={r} fill="none" stroke={ringColor} strokeWidth="12"
-                    strokeDasharray={circ} strokeDashoffset={dashOffset} strokeLinecap="round"
-                    transform="rotate(-90 120 120)" style={{ transition:"stroke-dashoffset 0.5s linear,stroke 0.35s ease", filter:`drop-shadow(0 0 8px ${ringColor})` }} />
-                )}
-                {isIdle && (
-                  <circle cx="120" cy="120" r={r} fill="none" stroke={THEMES.dark.green} strokeWidth="12"
-                    strokeDasharray={circ} strokeDashoffset={0}
-                    transform="rotate(-90 120 120)" style={{ filter:`drop-shadow(0 0 10px ${THEMES.dark.green}cc)` }} />
-                )}
+              <div style={{ position:"absolute", inset:-50, background:`radial-gradient(circle, ${ringColor}2a 0%, transparent 68%)`, borderRadius:"50%", transition:"background 0.4s ease", pointerEvents:"none" }} />
+              <svg width="210" height="210" viewBox="0 0 240 240">
+                <circle cx="120" cy="120" r={r} fill="none" stroke="#161616" strokeWidth="12" />
+                <circle cx="120" cy="120" r={r} fill="none" stroke={ringColor} strokeWidth="12"
+                  strokeDasharray={circ} strokeDashoffset={isIdle ? 0 : dashOffset}
+                  strokeLinecap="round" transform="rotate(-90 120 120)"
+                  style={{ transition:"stroke-dashoffset 0.5s linear, stroke 0.35s ease", filter:`drop-shadow(0 0 10px ${ringColor}cc)` }} />
               </svg>
               <div style={{ position:"absolute", inset:0, display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", gap:4 }}>
-                <span style={{ fontSize:54, fontWeight:800, fontFamily:"'Outfit',sans-serif", color:THEMES.dark.textPrimary, lineHeight:1, letterSpacing:-2 }}>{mins}:{secs}</span>
-                <span style={{ fontSize:11, fontWeight:700, fontFamily:"'Outfit',sans-serif", color: isIdle ? THEMES.dark.green : ringColor, letterSpacing:5 }}>
+                <span style={{ fontSize:52, fontWeight:800, fontFamily:"'Outfit',sans-serif", color:THEMES.dark.textPrimary, lineHeight:1, letterSpacing:-2 }}>{mins}:{secs}</span>
+                <span style={{ fontSize:11, fontWeight:700, fontFamily:"'Outfit',sans-serif", color:ringColor, letterSpacing:5 }}>
                   {isIdle?"READY":isHold?"HOLD":"REST"}
                 </span>
               </div>
             </div>
 
             {/* Cue text */}
-            <div style={{ fontSize:13, color:THEMES.dark.textSecondary, textAlign:"center", marginBottom:14, padding:"0 16px", lineHeight:1.55 }}>
+            <div style={{ fontSize:13, color:THEMES.dark.textSecondary, textAlign:"center", marginBottom:16, padding:"0 16px", lineHeight:1.55 }}>
               {isIdle ? `Set ${completedSets+1} of ${totalSets} — ${exercise.cue}`
                       : isHold ? `Set ${completedSets+1} of ${totalSets} — hold it steady`
                                 : `Recover · Set ${completedSets+1} of ${totalSets} coming up`}
             </div>
 
-            {/* Action buttons */}
+            {/* Primary action button */}
             {isIdle && (
-              <button onClick={handleStart} style={{ width:"100%", maxWidth:360, background:THEMES.dark.green, color:"#000", border:"none", borderRadius:50, padding:"18px", fontSize:16, fontWeight:800, fontFamily:"'Outfit',sans-serif", cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center", gap:10, boxShadow:`0 0 28px ${THEMES.dark.green}55` }}>
+              <button onClick={handleStart} style={{ width:"100%", maxWidth:360, background:THEMES.dark.green, color:"#000", border:"none", borderRadius:50, padding:"18px", fontSize:16, fontWeight:800, fontFamily:"'Outfit',sans-serif", cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center", gap:10 }}>
                 <Icon name="play" size={17} color="#000" />
                 {completedSets===0 ? "Start Hold" : `Start Set ${completedSets+1}`}
               </button>
@@ -749,7 +735,7 @@ function WorkoutScreen({ onExit, onComplete, settings, intensity: initIntensity,
                   <Icon name={isRunning?"pause":"play"} size={16} color={isRunning?THEMES.dark.textSecondary:"#000"} />
                   {isRunning?"PAUSE":"RESUME"}
                 </button>
-                <button onClick={handleResetSet} style={{ background:"#111", border:`1.5px solid #333`, borderRadius:50, padding:"17px 20px", cursor:"pointer", display:"flex", alignItems:"center" }}>
+                <button onClick={handleResetSet} style={{ background:"#111", border:`1.5px solid #2a2a2a`, borderRadius:50, padding:"17px 20px", cursor:"pointer", display:"flex", alignItems:"center" }}>
                   <Icon name="reset" size={17} color={THEMES.dark.textSecondary} />
                 </button>
               </div>
@@ -763,32 +749,22 @@ function WorkoutScreen({ onExit, onComplete, settings, intensity: initIntensity,
         )}
       </div>
 
-      {/* End Workout button */}
-      <div style={{ padding:"8px 24px 12px", flexShrink:0 }}>
+      {/* End Workout */}
+      <div style={{ padding:"8px 24px 44px", flexShrink:0 }}>
         {showExit ? (
           <div className="fade-in-fast" style={{ background:"#111", border:`1px solid #2a2a2a`, borderRadius:18, padding:"18px", textAlign:"center" }}>
             <div style={{ fontSize:14, fontWeight:700, fontFamily:"'Outfit',sans-serif", marginBottom:3 }}>End this workout?</div>
-            <div style={{ fontSize:12, color:THEMES.dark.textSecondary, marginBottom:16 }}>Your progress won't be saved</div>
+            <div style={{ fontSize:12, color:THEMES.dark.textSecondary, marginBottom:16 }}>Progress won't be saved</div>
             <div style={{ display:"flex", gap:10 }}>
               <button onClick={()=>setShowExit(false)} style={{ flex:1, background:"#1a1a1a", border:"1px solid #333", borderRadius:50, padding:"12px", fontSize:14, fontWeight:600, color:THEMES.dark.textSecondary, cursor:"pointer" }}>Keep Going</button>
               <button onClick={onExit} style={{ flex:1, background:THEMES.dark.red+"15", border:`1.5px solid ${THEMES.dark.red}66`, borderRadius:50, padding:"12px", fontSize:14, fontWeight:700, fontFamily:"'Outfit',sans-serif", color:THEMES.dark.red, cursor:"pointer" }}>End Workout</button>
             </div>
           </div>
         ) : (
-          <button onClick={()=>setShowExit(true)} style={{ width:"100%", background:"transparent", border:`1.5px solid ${THEMES.dark.red}55`, borderRadius:50, padding:"15px", fontSize:15, fontWeight:700, fontFamily:"'Outfit',sans-serif", color:THEMES.dark.red, cursor:"pointer", letterSpacing:0.3 }}>
+          <button onClick={()=>setShowExit(true)} style={{ width:"100%", background:"transparent", border:`1.5px solid ${THEMES.dark.red}55`, borderRadius:50, padding:"16px", fontSize:15, fontWeight:700, fontFamily:"'Outfit',sans-serif", color:THEMES.dark.red, cursor:"pointer" }}>
             End Workout
           </button>
         )}
-      </div>
-
-      {/* Nav tabs — mirrored from App so they stay visible during workout */}
-      <div style={{ background:"#0a0a0a", borderTop:`1px solid #1a1a1a`, display:"flex", flexShrink:0 }}>
-        {[{id:"today",label:"TODAY",icon:"today"},{id:"trends",label:"TRENDS",icon:"trends"},{id:"protocols",label:"PROTOCOLS",icon:"protocols"},{id:"profile",label:"PROFILE",icon:"profile"}].map(t => (
-          <div key={t.id} style={{ flex:1, padding:"12px 0 11px", display:"flex", flexDirection:"column", alignItems:"center", gap:4 }}>
-            <Icon name={t.icon} size={21} color={t.id==="today" ? THEMES.dark.green : THEMES.dark.textSecondary} />
-            <span style={{ fontSize:9, fontWeight:700, fontFamily:"'Outfit',sans-serif", letterSpacing:1.5, color:t.id==="today" ? THEMES.dark.green : THEMES.dark.textSecondary }}>{t.label}</span>
-          </div>
-        ))}
       </div>
     </div>
   );
