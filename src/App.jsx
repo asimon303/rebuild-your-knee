@@ -59,12 +59,11 @@ const THEMES = {
     navBg: "#0d0d0d", inputBg: "#111", rowBorder: "#1a1a1a",
     timerTrack: "#1a1a1a", barEmpty: "#1e1e1e", barBorder: "#2a2a2a",
     sliderThumbBorder: "#0a0a0a",
-    // Extended tokens
-    surface:    "#111",       // slightly elevated surface inside cards
-    surfaceAlt: "#0e0e0e",    // deeper inset areas
+    surface:    "#111",       surface:    "#111",
+    surfaceAlt: "#0e0e0e",    surfaceAlt: "#0e0e0e",
     surfaceBorder: "#222",
-    rowAlt:     "#1a1a1a",    // subtle row separators
-    badgeBg:    "#1a1a1a",    // number badge backgrounds
+    rowAlt:     "#1a1a1a",    rowAlt:     "#1a1a1a",
+    badgeBg:    "#1a1a1a",    badgeBg:    "#1a1a1a",
     badgeText:  "#555",
     mutedText:  "#555",
     dimText:    "#444",
@@ -81,7 +80,6 @@ const THEMES = {
     navBg: "#ffffff", inputBg: "#f5f5f5", rowBorder: "#eeeeee",
     timerTrack: "#e0e0e0", barEmpty: "#e8e8e8", barBorder: "#d5d5d5",
     sliderThumbBorder: "#f0f0f0",
-    // Extended tokens
     surface:    "#f5f5f5",
     surfaceAlt: "#efefef",
     surfaceBorder: "#e0e0e0",
@@ -134,8 +132,6 @@ const makeStyles = (c) => `
   .btn-icon { background:${c.card}; border:1px solid ${c.cardBorder}; border-radius:12px; padding:12px 14px; cursor:pointer; display:inline-flex; align-items:center; }
 `;
 
-// Keep a module-level colors alias that components can use as fallback
-// (overridden by useTheme() inside components)
 let colors = THEMES.dark;
 
 // ── Sound / Haptic helpers ────────────────────────────────────────────────────
@@ -303,6 +299,175 @@ function Sparkline({ data, color, height = 52 }) {
   );
 }
 
+// ── TIMERS SCREEN (Simple Sets/Hold/Rest Configuration) ────────────────────────
+function TimersScreen({ onClose }) {
+  const c = useTheme();
+  const [sets, setSets] = useState(3);
+  const [holdTime, setHoldTime] = useState(45);
+  const [restTime, setRestTime] = useState(60);
+  const [phase, setPhase] = useState("config"); // "config" | "workout"
+  const [currentSet, setCurrentSet] = useState(1);
+  const [timeLeft, setTimeLeft] = useState(45);
+  const [isRunning, setIsRunning] = useState(false);
+  const [workoutPhase, setWorkoutPhase] = useState("hold"); // "hold" | "rest"
+
+  const timerRef = useRef(null);
+  const phaseRef = useRef(workoutPhase);
+  const setRef = useRef(currentSet);
+  phaseRef.current = workoutPhase;
+  setRef.current = currentSet;
+
+  const tick = useCallback(() => {
+    setTimeLeft(prev => {
+      if (prev > 1) return prev - 1;
+      const p = phaseRef.current;
+      if (p === "hold") {
+        cueHoldEnd();
+        setWorkoutPhase("rest");
+        setTimeout(() => setIsRunning(true), 60);
+        return restTime;
+      }
+      if (p === "rest") {
+        cueRestEnd();
+        const nextSet = setRef.current + 1;
+        if (nextSet > sets) {
+          setIsRunning(false);
+          clearInterval(timerRef.current);
+          setPhase("done");
+          return 0;
+        }
+        setCurrentSet(nextSet);
+        setWorkoutPhase("hold");
+        setIsRunning(false);
+        return holdTime;
+      }
+      return 0;
+    });
+  }, [holdTime, restTime, sets]);
+
+  useEffect(() => {
+    if (isRunning) timerRef.current = setInterval(tick, 1000);
+    else clearInterval(timerRef.current);
+    return () => clearInterval(timerRef.current);
+  }, [isRunning, tick]);
+
+  const r = 100, circ = 2 * Math.PI * r;
+  const total = workoutPhase === "hold" ? holdTime : restTime;
+  const dashOffset = circ * (timeLeft / total);
+  const mins = String(Math.floor(timeLeft / 60)).padStart(2, "0");
+  const secs = String(timeLeft % 60).padStart(2, "0");
+  const ringColor = workoutPhase === "hold" ? c.green : c.blue;
+
+  if (phase === "done") {
+    return (
+      <div style={{ position: "fixed", inset: 0, background: "#000", zIndex: 200, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "40px 24px" }}>
+        <div style={{ width: 80, height: 80, borderRadius: 20, background: c.green, display: "flex", alignItems: "center", justifyContent: "center", marginBottom: 24 }}>
+          <Icon name="check" size={38} color="#000" />
+        </div>
+        <div style={{ fontSize: 32, fontWeight: 900, fontFamily: "'Outfit',sans-serif", marginBottom: 6, letterSpacing: -0.5 }}>Timers Complete!</div>
+        <div style={{ fontSize: 14, color: c.textSecondary, marginBottom: 32 }}>{sets} sets done</div>
+        <button onClick={onClose} style={{ width: "100%", maxWidth: 360, background: c.green, color: "#000", border: "none", borderRadius: 50, padding: "17px", fontSize: 16, fontWeight: 900, fontFamily: "'Outfit',sans-serif", cursor: "pointer" }}>
+          Back to Home
+        </button>
+      </div>
+    );
+  }
+
+  if (phase === "workout") {
+    return (
+      <div style={{ position: "fixed", inset: 0, background: "#000", zIndex: 200, display: "flex", flexDirection: "column" }}>
+        <div style={{ padding: "52px 20px 0", display: "flex", alignItems: "center", justifyContent: "space-between", flexShrink: 0 }}>
+          <div style={{ fontSize: 13, fontWeight: 700, fontFamily: "'Outfit',sans-serif", letterSpacing: 4, color: "#f2f2f2" }}>TIMER MODE</div>
+          <button onClick={() => { clearInterval(timerRef.current); onClose(); }} style={{ background: "transparent", border: `1px solid #333`, borderRadius: 10, padding: "8px 14px", fontSize: 12, fontWeight: 600, color: c.textSecondary, cursor: "pointer" }}>Close</button>
+        </div>
+
+        <div style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "0 24px" }}>
+          <div style={{ display: "inline-block", border: `1.5px solid ${c.green}`, borderRadius: 50, padding: "5px 18px", fontSize: 11, fontWeight: 800, fontFamily: "'Outfit',sans-serif", letterSpacing: 2, color: c.green, marginBottom: 20 }}>
+            SET {currentSet} OF {sets}
+          </div>
+
+          <div style={{ fontSize: 20, fontWeight: 900, fontFamily: "'Outfit',sans-serif", marginBottom: 32, textAlign: "center" }}>
+            {workoutPhase === "hold" ? "HOLD IT" : "REST UP"}
+          </div>
+
+          <div style={{ position: "relative", marginBottom: 28 }}>
+            <svg width="210" height="210" viewBox="0 0 240 240">
+              <circle cx="120" cy="120" r={r} fill="none" stroke="#161616" strokeWidth="12" />
+              <circle cx="120" cy="120" r={r} fill="none" stroke={ringColor} strokeWidth="12"
+                strokeDasharray={circ} strokeDashoffset={dashOffset}
+                strokeLinecap="round" transform="rotate(-90 120 120)"
+                style={{ transition: "stroke-dashoffset 0.5s linear, stroke 0.35s ease", filter: `drop-shadow(0 0 10px ${ringColor}cc)` }} />
+            </svg>
+            <div style={{ position: "absolute", inset: 0, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 4 }}>
+              <span style={{ fontSize: 52, fontWeight: 800, fontFamily: "'Outfit',sans-serif", color: "#f2f2f2", lineHeight: 1 }}>{mins}:{secs}</span>
+              <span style={{ fontSize: 11, fontWeight: 700, fontFamily: "'Outfit',sans-serif", color: ringColor, letterSpacing: 5 }}>
+                {workoutPhase === "hold" ? "HOLD" : "REST"}
+              </span>
+            </div>
+          </div>
+
+          <div style={{ display: "flex", gap: 10, width: "100%", maxWidth: 360 }}>
+            {workoutPhase === "hold" ? (
+              <button onClick={() => setIsRunning(!isRunning)} style={{ flex: 1, background: isRunning ? "#111" : c.green, color: isRunning ? c.textSecondary : "#000", border: `1.5px solid ${isRunning ? "#333" : c.green}`, borderRadius: 50, padding: "17px", fontSize: 15, fontWeight: 700, fontFamily: "'Outfit',sans-serif", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}>
+                <Icon name={isRunning ? "pause" : "play"} size={16} color={isRunning ? c.textSecondary : "#000"} />
+                {isRunning ? "PAUSE" : "RESUME"}
+              </button>
+            ) : (
+              <button disabled style={{ flex: 1, background: c.blue + "22", color: c.blue, border: `1.5px solid ${c.blue}55`, borderRadius: 50, padding: "17px", fontSize: 15, fontWeight: 700, fontFamily: "'Outfit',sans-serif", cursor: "default" }}>
+                Resting...
+              </button>
+            )}
+          </div>
+        </div>
+
+        <div style={{ padding: "8px 24px 44px", flexShrink: 0 }}>
+          <button onClick={() => { clearInterval(timerRef.current); onClose(); }} style={{ width: "100%", background: "transparent", border: `1.5px solid ${c.red}55`, borderRadius: 50, padding: "16px", fontSize: 15, fontWeight: 700, fontFamily: "'Outfit',sans-serif", color: c.red, cursor: "pointer" }}>
+            Exit Timers
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  // Config screen
+  return (
+    <div style={{ position: "fixed", inset: 0, background: "#000", zIndex: 200, display: "flex", flexDirection: "column" }}>
+      <div style={{ padding: "52px 20px 0", display: "flex", alignItems: "center", justifyContent: "space-between", flexShrink: 0 }}>
+        <div style={{ fontSize: 13, fontWeight: 700, fontFamily: "'Outfit',sans-serif", letterSpacing: 4, color: "#f2f2f2" }}>TIMER MODE</div>
+        <button onClick={onClose} style={{ background: "transparent", border: `1px solid #333`, borderRadius: 10, padding: "8px 14px", fontSize: 12, fontWeight: 600, color: c.textSecondary, cursor: "pointer" }}>Close</button>
+      </div>
+
+      <div style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "0 28px" }}>
+        <div style={{ fontSize: 32, fontWeight: 900, fontFamily: "'Outfit',sans-serif", marginBottom: 8 }}>Configure</div>
+        <div style={{ fontSize: 14, color: c.textSecondary, marginBottom: 40, textAlign: "center" }}>Set your hold time, rest period, and total sets</div>
+
+        <div style={{ width: "100%", maxWidth: 340, marginBottom: 40 }}>
+          {[
+            { label: "SETS", value: sets, setValue: setSets, min: 1, max: 10, step: 1, unit: "sets" },
+            { label: "HOLD TIME", value: holdTime, setValue: setHoldTime, min: 15, max: 120, step: 5, unit: "s" },
+            { label: "REST TIME", value: restTime, setValue: setRestTime, min: 20, max: 180, step: 5, unit: "s" }
+          ].map(s => (
+            <div key={s.label} style={{ marginBottom: 28 }}>
+              <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 12 }}>
+                <span style={{ fontSize: 13, fontWeight: 700, fontFamily: "'Outfit',sans-serif", letterSpacing: 2, color: c.textSecondary }}>{s.label}</span>
+                <span style={{ fontSize: 20, fontWeight: 800, fontFamily: "'Outfit',sans-serif", color: c.green }}>{s.value}{s.unit}</span>
+              </div>
+              <input type="range" min={s.min} max={s.max} step={s.step} value={s.value}
+                onChange={e => s.setValue(parseInt(e.target.value))}
+                style={{ width: "100%" }} />
+            </div>
+          ))}
+        </div>
+
+        <button onClick={() => { setTimeLeft(holdTime); setPhase("workout"); setIsRunning(true); }} style={{ width: "100%", maxWidth: 340, background: c.green, color: "#000", border: "none", borderRadius: 50, padding: "18px", fontSize: 16, fontWeight: 900, fontFamily: "'Outfit',sans-serif", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 10 }}>
+          <Icon name="play" size={17} color="#000" />
+          Start Timers
+        </button>
+      </div>
+    </div>
+  );
+}
+
 // ── WORKOUT SCREEN ────────────────────────────────────────────────────────────
 function WorkoutScreen({ onExit, onComplete, settings, intensity: initIntensity, stage }) {
   const { holdSecs, restSecs, totalSets } = settings;
@@ -313,6 +478,7 @@ function WorkoutScreen({ onExit, onComplete, settings, intensity: initIntensity,
   const [warmupIdx, setWarmupIdx]       = useState(0);
   const [warmupTimeLeft, setWarmupTimeLeft] = useState(WARMUP_STRETCHES[0].hold);
   const [warmupRunning, setWarmupRunning]   = useState(false);
+  const [warmupLegDone, setWarmupLegDone] = useState(false); // Track if first leg completed
   const warmupRef = useRef(null);
 
   useEffect(() => {
@@ -321,18 +487,41 @@ function WorkoutScreen({ onExit, onComplete, settings, intensity: initIntensity,
     } else {
       clearInterval(warmupRef.current);
       if (warmupRunning && warmupTimeLeft === 0) {
-        // auto-advance to next stretch
-        if (warmupIdx < WARMUP_STRETCHES.length - 1) {
-          setWarmupIdx(i => i + 1);
-          setWarmupTimeLeft(WARMUP_STRETCHES[warmupIdx + 1].hold);
-          setWarmupRunning(false);
+        cueHoldEnd();
+        // Timer completed — for bilateral stretches, ask for other leg
+        const currentStretch = WARMUP_STRETCHES[warmupIdx];
+        if (currentStretch.name.includes("Quad") || currentStretch.name.includes("Hamstring") || currentStretch.name.includes("Calf")) {
+          if (!warmupLegDone) {
+            // First leg done, now reset for second leg
+            setWarmupLegDone(true);
+            setWarmupTimeLeft(currentStretch.hold);
+            setWarmupRunning(false);
+          } else {
+            // Both legs done, move to next stretch
+            if (warmupIdx < WARMUP_STRETCHES.length - 1) {
+              setWarmupIdx(i => i + 1);
+              setWarmupTimeLeft(WARMUP_STRETCHES[warmupIdx + 1].hold);
+              setWarmupLegDone(false);
+              setWarmupRunning(false);
+            } else {
+              setWarmupRunning(false);
+            }
+          }
         } else {
-          setWarmupRunning(false);
+          // Non-bilateral exercise, just advance
+          if (warmupIdx < WARMUP_STRETCHES.length - 1) {
+            setWarmupIdx(i => i + 1);
+            setWarmupTimeLeft(WARMUP_STRETCHES[warmupIdx + 1].hold);
+            setWarmupRunning(false);
+          } else {
+            setWarmupRunning(false);
+          }
         }
       }
     }
     return () => clearInterval(warmupRef.current);
-  }, [warmupRunning, warmupTimeLeft, warmupIdx]);
+  }, [warmupRunning, warmupTimeLeft, warmupIdx, warmupLegDone]);
+
   const [exIdx, setExIdx]               = useState(0);
   const [phase, setPhase]               = useState("idle");
   const [timeLeft, setTimeLeft]         = useState(holdSecs);
@@ -343,7 +532,7 @@ function WorkoutScreen({ onExit, onComplete, settings, intensity: initIntensity,
   const [intensity, setIntensity]       = useState(initIntensity);
   const [sessionStartTime]              = useState(Date.now());
 
-  const c = THEMES.dark; // Workout screen is always dark regardless of app theme
+  const c = THEMES.dark;
 
   const timerRef  = useRef(null);
   const phaseRef  = useRef(phase);
@@ -394,12 +583,10 @@ function WorkoutScreen({ onExit, onComplete, settings, intensity: initIntensity,
 
   const [confirmedEffort, setConfirmedEffort] = useState(false);
 
-  // ── Must be declared here (before any early returns) to satisfy Rules of Hooks ──
   const holdHeadlines = ["THIS SHOULD BE DIFFICULT","FEEL THE BURN","DON'T YOU DARE QUIT","LOCK IT IN","EMBRACE THE DISCOMFORT"];
   const restHeadlines = ["SHAKE IT OFF","YOU EARNED THIS","BREATHE. RESET.","STAY LOOSE","NEXT SET INCOMING"];
   const [headlineIdx] = useState(() => Math.floor(Math.random() * holdHeadlines.length));
 
-  // Show effort confirmation before first hold of the session
   const showEffortPrompt = isIdle && exIdx === 0 && completedSets === 0 && !confirmedEffort;
 
   const handleStart    = () => { setPhase("hold"); setTimeLeft(holdSecs); setIsRunning(true); };
@@ -421,6 +608,9 @@ function WorkoutScreen({ onExit, onComplete, settings, intensity: initIntensity,
     const pct = 1 - warmupTimeLeft / stretch.hold;
     const r2 = 68, circ2 = 2 * Math.PI * r2;
     const allDone = warmupIdx === WARMUP_STRETCHES.length - 1 && warmupTimeLeft === 0 && !warmupRunning;
+    const isBilateral = stretch.name.includes("Quad") || stretch.name.includes("Hamstring") || stretch.name.includes("Calf");
+    const stretchLabel = isBilateral && warmupLegDone ? `${stretch.name} (Other Leg)` : stretch.name;
+    
     return (
       <div style={{ position:"fixed", inset:0, background:"#000", zIndex:200, display:"flex", flexDirection:"column" }}>
         {/* Header */}
@@ -442,7 +632,7 @@ function WorkoutScreen({ onExit, onComplete, settings, intensity: initIntensity,
         {/* Main content */}
         <div style={{ flex:1, display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", padding:"0 28px" }}>
           <div style={{ fontSize:44, marginBottom:16 }}>{stretch.emoji}</div>
-          <div style={{ fontSize:26, fontWeight:900, fontFamily:"'Outfit',sans-serif", textAlign:"center", marginBottom:8 }}>{stretch.name}</div>
+          <div style={{ fontSize:26, fontWeight:900, fontFamily:"'Outfit',sans-serif", textAlign:"center", marginBottom:8 }}>{stretchLabel}</div>
           <div style={{ fontSize:14, color:THEMES.dark.textSecondary, textAlign:"center", lineHeight:1.6, marginBottom:32, maxWidth:280 }}>{stretch.cue}</div>
 
           {/* Timer ring */}
@@ -465,7 +655,7 @@ function WorkoutScreen({ onExit, onComplete, settings, intensity: initIntensity,
           </div>
 
           <div style={{ fontSize:12, color:THEMES.dark.textSecondary }}>
-            Stretch {warmupIdx + 1} of {WARMUP_STRETCHES.length}
+            Stretch {warmupIdx + 1} of {WARMUP_STRETCHES.length}{isBilateral && warmupLegDone ? " (Leg 2)" : ""}
           </div>
         </div>
 
@@ -475,8 +665,12 @@ function WorkoutScreen({ onExit, onComplete, settings, intensity: initIntensity,
             <button onClick={()=>setWarmupDone(true)} style={{ width:"100%", background:THEMES.dark.green, color:"#000", border:"none", borderRadius:50, padding:"18px", fontSize:16, fontWeight:900, fontFamily:"'Outfit',sans-serif", cursor:"pointer" }}>
               Start Workout →
             </button>
+          ) : warmupTimeLeft === 0 && isBilateral && !warmupLegDone ? (
+            <button onClick={()=>{ setWarmupTimeLeft(stretch.hold); setWarmupRunning(false); }} style={{ width:"100%", background:THEMES.dark.green, color:"#000", border:"none", borderRadius:50, padding:"18px", fontSize:16, fontWeight:900, fontFamily:"'Outfit',sans-serif", cursor:"pointer" }}>
+              Other Leg →
+            </button>
           ) : warmupTimeLeft === 0 && warmupIdx < WARMUP_STRETCHES.length - 1 ? (
-            <button onClick={()=>{ setWarmupIdx(i=>i+1); setWarmupTimeLeft(WARMUP_STRETCHES[warmupIdx+1].hold); setWarmupRunning(false); }} style={{ width:"100%", background:THEMES.dark.green, color:"#000", border:"none", borderRadius:50, padding:"18px", fontSize:16, fontWeight:900, fontFamily:"'Outfit',sans-serif", cursor:"pointer" }}>
+            <button onClick={()=>{ setWarmupIdx(i=>i+1); setWarmupTimeLeft(WARMUP_STRETCHES[warmupIdx+1].hold); setWarmupLegDone(false); setWarmupRunning(false); }} style={{ width:"100%", background:THEMES.dark.green, color:"#000", border:"none", borderRadius:50, padding:"18px", fontSize:16, fontWeight:900, fontFamily:"'Outfit',sans-serif", cursor:"pointer" }}>
               Next Stretch →
             </button>
           ) : !warmupRunning ? (
@@ -493,20 +687,6 @@ function WorkoutScreen({ onExit, onComplete, settings, intensity: initIntensity,
             Skip to Workout
           </button>
         </div>
-
-        {/* Exit confirm */}
-        {showExit && (
-          <div style={{ position:"absolute", inset:0, background:"#000000cc", display:"flex", alignItems:"center", justifyContent:"center", padding:24 }}>
-            <div style={{ background:"#141414", border:"1px solid #222", borderRadius:20, padding:24, width:"100%", maxWidth:340, textAlign:"center" }}>
-              <div style={{ fontSize:16, fontWeight:700, fontFamily:"'Outfit',sans-serif", marginBottom:6 }}>Exit workout?</div>
-              <div style={{ fontSize:13, color:THEMES.dark.textSecondary, marginBottom:20 }}>Progress won't be saved</div>
-              <div style={{ display:"flex", gap:10 }}>
-                <button onClick={()=>setShowExit(false)} style={{ flex:1, background:"#1a1a1a", border:"1px solid #333", borderRadius:50, padding:"12px", fontSize:14, fontWeight:600, color:THEMES.dark.textSecondary, cursor:"pointer" }}>Stay</button>
-                <button onClick={onExit} style={{ flex:1, background:THEMES.dark.red+"15", border:`1.5px solid ${THEMES.dark.red}55`, borderRadius:50, padding:"12px", fontSize:14, fontWeight:700, color:THEMES.dark.red, cursor:"pointer" }}>Exit</button>
-              </div>
-            </div>
-          </div>
-        )}
       </div>
     );
   }
@@ -771,44 +951,33 @@ function WorkoutScreen({ onExit, onComplete, settings, intensity: initIntensity,
 }
 
 // ── TODAY SCREEN ──────────────────────────────────────────────────────────────
-function TodayScreen({ painLog, setPainLog, sessionHistory, streak, onStartWorkout, settings, stage }) {
+function TodayScreen({ painLog, setPainLog, sessionHistory, streak, onStartWorkout, settings, stage, onStartTimers }) {
   const c = useTheme();
   const [painValue, setPainValue]     = useState(painLog[painLog.length-1]?.value ?? 2);
   const [checkedIn, setCheckedIn]     = useState(false);
   const [supplements, setSupplements] = useState([false,false]);
   const supps = ["15g Collagen Peptides","225mg Vitamin C"];
 
-  // Stage-specific exercise list for the preview card
   const WORKOUT_EXERCISES = EXERCISES_BY_STAGE[stage] || EXERCISES_BY_STAGE.A;
 
-  // Detect if a session was completed today
   const todayStr = new Date().toLocaleDateString("en-GB",{day:"2-digit",month:"short",year:"numeric"});
   const sessionToday = sessionHistory.some(s => s.date === todayStr);
 
-  // 48-hour rest check — find the most recent session date
   const lastSession = sessionHistory.length > 0 ? sessionHistory[sessionHistory.length - 1] : null;
-  const hoursSinceLastSession = lastSession
-    ? (Date.now() - new Date(lastSession.date.split(" ").reverse().join(" "))) / 3600000
-    : 999;
-  // Parse the stored date string "DD Mon YYYY" properly
   const lastSessionDate = lastSession ? (() => {
-    const parts = lastSession.date.split(" "); // ["24","Feb","2026"]
+    const parts = lastSession.date.split(" ");
     const months = {Jan:0,Feb:1,Mar:2,Apr:3,May:4,Jun:5,Jul:6,Aug:7,Sep:8,Oct:9,Nov:10,Dec:11};
     return new Date(parseInt(parts[2]), months[parts[1]], parseInt(parts[0]));
   })() : null;
-  const daysSinceLast = lastSessionDate
-    ? Math.floor((Date.now() - lastSessionDate.getTime()) / 86400000)
-    : 99;
-  const within48hrs = daysSinceLast === 0 && !sessionToday; // trained today already handled separately
-  const needsRest   = daysSinceLast < 1 && !sessionToday;  // same-day attempt
+  const daysSinceLast = lastSessionDate ? Math.floor((Date.now() - lastSessionDate.getTime()) / 86400000) : 99;
+  const within48hrs = daysSinceLast === 0 && !sessionToday;
+  const needsRest   = daysSinceLast < 1 && !sessionToday;
 
-  // Timestamp-based nutrition timer — survives lock screen / backgrounding
   const DURATION = 3600;
   const [nutStartedAt, setNutStartedAt] = useState(null);
   const [nutSecondsLeft, setNutSecondsLeft] = useState(DURATION);
   const nutTickRef = useRef(null);
 
-  // Ice timer — 10 minutes, same timestamp approach
   const ICE_DURATION = 600;
   const [iceStartedAt, setIceStartedAt] = useState(null);
   const [iceSecondsLeft, setIceSecondsLeft] = useState(ICE_DURATION);
@@ -843,7 +1012,6 @@ function TodayScreen({ painLog, setPainLog, sessionHistory, streak, onStartWorko
     return () => document.removeEventListener("visibilitychange", onVisible);
   }, [iceStartedAt, recalcIce]);
 
-  // Recalculate remaining time from the stored start timestamp
   const recalcNut = useCallback(() => {
     if (!nutStartedAt) return;
     const elapsed = Math.floor((Date.now() - nutStartedAt) / 1000);
@@ -857,7 +1025,7 @@ function TodayScreen({ painLog, setPainLog, sessionHistory, streak, onStartWorko
 
   useEffect(() => {
     if (nutStartedAt) {
-      recalcNut(); // immediate update on mount / resume
+      recalcNut();
       nutTickRef.current = setInterval(recalcNut, 1000);
     } else {
       clearInterval(nutTickRef.current);
@@ -865,7 +1033,6 @@ function TodayScreen({ painLog, setPainLog, sessionHistory, streak, onStartWorko
     return () => clearInterval(nutTickRef.current);
   }, [nutStartedAt, recalcNut]);
 
-  // Recalculate when app comes back to foreground
   useEffect(() => {
     const onVisible = () => { if (nutStartedAt) recalcNut(); };
     document.addEventListener("visibilitychange", onVisible);
@@ -874,7 +1041,6 @@ function TodayScreen({ painLog, setPainLog, sessionHistory, streak, onStartWorko
 
   const handleNutStart  = () => setNutStartedAt(Date.now());
   const handleNutPause  = () => {
-    // Freeze remaining time, clear start so interval stops
     setNutSecondsLeft(prev => { setNutStartedAt(null); return prev; });
   };
   const handleNutReset  = () => { setNutStartedAt(null); setNutSecondsLeft(DURATION); };
@@ -883,11 +1049,9 @@ function TodayScreen({ painLog, setPainLog, sessionHistory, streak, onStartWorko
 
   const painColor = painValue<=3?c.green:painValue<=6?c.yellow:c.red;
 
-  // Pain spike insight
   const recentPain = painLog.slice(-3).map(p=>p.value);
   const painSpike = recentPain.length===3 && recentPain.every((v,i)=>i===0||v>=recentPain[i-1]) && recentPain[2]>recentPain[0];
 
-  // Overload prompt — 4+ sessions at same intensity, no pain spike
   const lastFour = sessionHistory.slice(-4);
   const sameIntensity = lastFour.length===4 && lastFour.every(s=>s.intensity===lastFour[0].intensity);
   const recentAvgPain = painLog.slice(-4).reduce((a,b)=>a+b.value,0)/(painLog.slice(-4).length||1);
@@ -907,7 +1071,6 @@ function TodayScreen({ painLog, setPainLog, sessionHistory, streak, onStartWorko
   return (
     <div className="scroll-area fade-in" style={{ padding:"0 16px 100px" }}>
 
-      {/* Greeting */}
       {(() => {
         const h = new Date().getHours();
         const greeting = h < 12 ? "Good morning" : h < 17 ? "Good afternoon" : "Good evening";
@@ -923,7 +1086,6 @@ function TodayScreen({ painLog, setPainLog, sessionHistory, streak, onStartWorko
         );
       })()}
 
-      {/* Overload prompt */}
       {showOverload && (
         <div className="slide-up" style={{ background:c.yellow+"11", border:`1px solid ${c.yellow}33`, borderRadius:14, padding:"14px 16px", marginBottom:12, display:"flex", gap:12, alignItems:"flex-start" }}>
           <Icon name="up" size={18} color={c.yellow} />
@@ -934,7 +1096,6 @@ function TodayScreen({ painLog, setPainLog, sessionHistory, streak, onStartWorko
         </div>
       )}
 
-      {/* Pain spike warning — rich intervention card */}
       {painSpike && (
         <div className="slide-up" style={{ background:c.red+"0d", border:`1.5px solid ${c.red}44`, borderRadius:16, padding:"16px", marginBottom:12 }}>
           <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:12 }}>
@@ -960,7 +1121,6 @@ function TodayScreen({ painLog, setPainLog, sessionHistory, streak, onStartWorko
         </div>
       )}
 
-      {/* 24-HR Check-In */}
       <div className="card">
         <div style={{ display:"flex", alignItems:"center", gap:12, marginBottom:16 }}>
           <div style={{ width:38, height:38, borderRadius:10, background:c.badgeBg, border:`1px solid ${c.cardBorder}`, display:"flex", alignItems:"center", justifyContent:"center" }}>
@@ -996,7 +1156,6 @@ function TodayScreen({ painLog, setPainLog, sessionHistory, streak, onStartWorko
             )}
           </div>
         </div>
-        {/* Rest Day */}
         {!checkedIn && (
           <button onClick={handleRestDay} style={{ width:"100%", marginTop:10, background:"transparent", border:`1px solid #222`, borderRadius:10, padding:"10px", fontSize:12, fontWeight:600, color:c.textSecondary, cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center", gap:7 }}>
             <Icon name="moon" size={14} color={c.textSecondary} />
@@ -1005,7 +1164,6 @@ function TodayScreen({ painLog, setPainLog, sessionHistory, streak, onStartWorko
         )}
       </div>
 
-      {/* Pre-Workout Nutrition */}
       <div className="card">
         <div style={{ display:"flex", alignItems:"center", gap:12, marginBottom:4 }}>
           <div style={{ width:38, height:38, borderRadius:10, background:c.badgeBg, border:`1px solid ${c.cardBorder}`, display:"flex", alignItems:"center", justifyContent:"center" }}>
@@ -1044,7 +1202,6 @@ function TodayScreen({ painLog, setPainLog, sessionHistory, streak, onStartWorko
         ))}
       </div>
 
-      {/* Today's Workout */}
       <div className="card">
         <div style={{ display:"flex", alignItems:"center", gap:12, marginBottom:16 }}>
           <div style={{ width:38, height:38, borderRadius:10, background:c.green+"18", border:`1px solid ${c.green}33`, display:"flex", alignItems:"center", justifyContent:"center" }}>
@@ -1064,7 +1221,6 @@ function TodayScreen({ painLog, setPainLog, sessionHistory, streak, onStartWorko
             <span style={{ marginLeft:"auto", fontSize:11, color:c.dimText, fontWeight:500 }}>{settings.totalSets} × {settings.holdSecs}s</span>
           </div>
         ))}
-        {/* 48-hour rest warning */}
         {needsRest && !sessionToday && (
           <div style={{ background:c.yellow+"11", border:`1px solid ${c.yellow}33`, borderRadius:12, padding:"12px 14px", marginTop:14, display:"flex", gap:10, alignItems:"flex-start" }}>
             <Icon name="warn" size={16} color={c.yellow} />
@@ -1081,7 +1237,19 @@ function TodayScreen({ painLog, setPainLog, sessionHistory, streak, onStartWorko
         </button>
       </div>
 
-      {/* Streak */}
+      <div className="card" style={{ background:c.green+"18", border:`1px solid ${c.green}33`, marginBottom:12 }}>
+        <button onClick={onStartTimers} style={{ width:"100%", background:"transparent", border:"none", cursor:"pointer", display:"flex", alignItems:"center", gap:12, padding:0 }}>
+          <div style={{ width:38, height:38, borderRadius:10, background:c.green, display:"flex", alignItems:"center", justifyContent:"center" }}>
+            <Icon name="bell" size={17} color="#000" />
+          </div>
+          <div style={{ textAlign:"left", flex:1 }}>
+            <div style={{ fontSize:16, fontWeight:700, fontFamily:"'Outfit',sans-serif", color:c.green }}>Quick Timers</div>
+            <div style={{ fontSize:12, color:c.textSecondary, marginTop:1 }}>Custom sets, hold, rest</div>
+          </div>
+          <Icon name="arrow" size={18} color={c.green} />
+        </button>
+      </div>
+
       <div className="card" style={{ background:c.streakBg, border:`1px solid ${c.green}33`, position:"relative", overflow:"hidden" }}>
         <div style={{ position:"absolute", bottom:-24, right:-10, opacity:0.06 }}><Icon name="fire" size={130} color={c.green} /></div>
         <div style={{ fontSize:10, color:c.green, fontWeight:600, letterSpacing:3, marginBottom:8 }}>DAILY STREAK</div>
@@ -1091,7 +1259,6 @@ function TodayScreen({ painLog, setPainLog, sessionHistory, streak, onStartWorko
         </div>
       </div>
 
-      {/* Ice Timer — always visible at bottom of Today screen */}
       <div className="card">
         <div style={{ display:"flex", alignItems:"center", gap:12, marginBottom:16 }}>
           <div style={{ width:38, height:38, borderRadius:10, background:"#e0f4ff22", border:`1px solid #38bdf833`, display:"flex", alignItems:"center", justifyContent:"center", fontSize:20 }}>
@@ -1151,7 +1318,6 @@ function TrendsScreen({ painLog, sessionHistory, onExport }) {
   const prevAvgPain  = prev7Pain.length ? (prev7Pain.reduce((a,b)=>a+b.value,0)/prev7Pain.length).toFixed(1) : null;
   const painDelta    = prevAvgPain ? (parseFloat(avgPain) - parseFloat(prevAvgPain)).toFixed(1) : null;
 
-  // Consistency = % of last 30 days with session or rest log
   const todayMs = Date.now();
   const activeDates = new Set([...sessionHistory.map(s=>s.date), ...painLog.map(p=>p.date)]);
   let activeDays = 0;
@@ -1161,13 +1327,12 @@ function TrendsScreen({ painLog, sessionHistory, onExport }) {
     if (activeDates.has(lbl)) activeDays++;
   }
   const consistency = Math.round((activeDays / 30) * 100);
-  const prevConsistency = Math.max(0, consistency - 5); // approx trend
+  const prevConsistency = Math.max(0, consistency - 5);
   const consistencyDelta = consistency - prevConsistency;
 
-  // Monthly calendar
   const now = new Date();
   const year = now.getFullYear(), month = now.getMonth();
-  const firstDay = new Date(year, month, 1).getDay(); // 0=Sun
+  const firstDay = new Date(year, month, 1).getDay();
   const daysInMonth = new Date(year, month+1, 0).getDate();
   const monthName = now.toLocaleString("en-GB", { month:"long", year:"numeric" }).toUpperCase();
   const sessionDates = new Set(sessionHistory.map(s=>s.date));
@@ -1185,7 +1350,6 @@ function TrendsScreen({ painLog, sessionHistory, onExport }) {
       <div style={{ fontSize:24, fontWeight:900, fontFamily:"'Outfit',sans-serif", marginBottom:4, letterSpacing:-0.5 }}>Recovery Trends</div>
       <div style={{ fontSize:12, color:c.textSecondary, marginBottom:16 }}>Monitoring morning baseline</div>
 
-      {/* Tab toggle */}
       <div style={{ display:"flex", background:c.surfaceAlt, borderRadius:12, padding:3, marginBottom:16, border:`1px solid ${c.cardBorder}` }}>
         {[{id:"pain",label:"Pain & Progress"},{id:"history",label:"Session History"}].map(t=>(
           <button key={t.id} onClick={()=>setTab(t.id)} style={{ flex:1, padding:"9px", borderRadius:9, border:"none", background:tab===t.id?c.card:"transparent", color:tab===t.id?c.textPrimary:c.textSecondary, fontSize:13, fontWeight:600, cursor:"pointer", transition:"all 0.2s", boxShadow:tab===t.id?`0 1px 4px rgba(0,0,0,0.15)`:"none" }}>
@@ -1196,7 +1360,6 @@ function TrendsScreen({ painLog, sessionHistory, onExport }) {
 
       {tab === "pain" && (
         <>
-          {/* Stats row */}
           <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10, marginBottom:12 }}>
             <div className="card" style={{ margin:0, padding:"16px" }}>
               <div style={{ fontSize:9, color:c.textSecondary, fontWeight:700, fontFamily:"'Outfit',sans-serif", letterSpacing:1.5, marginBottom:6 }}>AVG PAIN</div>
@@ -1218,7 +1381,6 @@ function TrendsScreen({ painLog, sessionHistory, onExport }) {
             </div>
           </div>
 
-          {/* 14-day sparkline */}
           <div className="card">
             <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", marginBottom:16 }}>
               <div>
@@ -1243,7 +1405,6 @@ function TrendsScreen({ painLog, sessionHistory, onExport }) {
             )}
           </div>
 
-          {/* Stats pills */}
           <div className="card">
             <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10 }}>
               <div style={{ background:c.surfaceAlt, borderRadius:12, padding:"14px", textAlign:"center" }}>
@@ -1259,7 +1420,6 @@ function TrendsScreen({ painLog, sessionHistory, onExport }) {
             </div>
           </div>
 
-          {/* Training vs rest pain */}
           {trainAvg && restAvg && (
             <div className="card">
               <div style={{ fontSize:16, fontWeight:700, fontFamily:"'Outfit',sans-serif", marginBottom:4 }}>Training vs Rest Day Pain</div>
@@ -1281,7 +1441,6 @@ function TrendsScreen({ painLog, sessionHistory, onExport }) {
             </div>
           )}
 
-          {/* Intensity sparkline */}
           {intensityData.length > 1 && (
             <div className="card">
               <div style={{ fontSize:16, fontWeight:700, fontFamily:"'Outfit',sans-serif", marginBottom:2 }}>Intensity Progression</div>
@@ -1295,7 +1454,6 @@ function TrendsScreen({ painLog, sessionHistory, onExport }) {
             </div>
           )}
 
-          {/* Monthly calendar */}
           <div className="card">
             <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:16 }}>
               <div style={{ fontSize:16, fontWeight:700, fontFamily:"'Outfit',sans-serif" }}>Monthly Outlook</div>
@@ -1305,7 +1463,6 @@ function TrendsScreen({ painLog, sessionHistory, onExport }) {
               {["M","T","W","T","F","S","S"].map((d,i)=>(
                 <div key={i} style={{ textAlign:"center", fontSize:9, fontWeight:700, color:c.textMuted, paddingBottom:4 }}>{d}</div>
               ))}
-              {/* Offset for first day — convert Sun=0 to Mon=0 */}
               {Array.from({ length: (firstDay + 6) % 7 }).map((_,i)=>(
                 <div key={`empty-${i}`} />
               ))}
@@ -1397,7 +1554,6 @@ function ProtocolsScreen({ stage, weeksInStage, avgPain, onAdvanceStage }) {
   return (
     <div className="scroll-area fade-in" style={{ padding:"0 0 100px" }}>
 
-      {/* Hero banner */}
       <div style={{ margin:"0 0 20px", background:"linear-gradient(135deg,#1a0800 0%,#2d1200 100%)", padding:"28px 20px 24px", borderBottom:`1px solid ${c.cardBorder}` }}>
         <div style={{ fontSize:9, fontWeight:700, fontFamily:"'Outfit',sans-serif", letterSpacing:3, color:c.orange, marginBottom:6 }}>SCIENTIFIC MASTERCLASS</div>
         <div style={{ fontSize:24, fontWeight:900, fontFamily:"'Outfit',sans-serif", color:c.orange, marginBottom:8, letterSpacing:-0.5 }}>The Baar Protocol</div>
@@ -1408,7 +1564,6 @@ function ProtocolsScreen({ stage, weeksInStage, avgPain, onAdvanceStage }) {
       </div>
 
       <div style={{ padding:"0 16px" }}>
-        {/* Stage advancement banner */}
         {readyToProgress && (
           <div className="slide-up" style={{ background:c.green+"11", border:`1px solid ${c.green}44`, borderRadius:16, padding:"16px 18px", marginBottom:16 }}>
             <div style={{ fontSize:13, fontWeight:700, fontFamily:"'Outfit',sans-serif", color:c.green, marginBottom:4 }}>Ready to advance to Phase {stageOrder.indexOf(criteria.nextStage)+1}?</div>
@@ -1432,7 +1587,6 @@ function ProtocolsScreen({ stage, weeksInStage, avgPain, onAdvanceStage }) {
             <div key={p.id} className="card" style={{ marginBottom:10, cursor: isFuture ? "default" : "pointer", border:`1px solid ${isExpanded ? p.color+"55" : isActive ? p.color+"33" : c.cardBorder}`, opacity: isFuture ? 0.55 : 1, transition:"all 0.2s" }}
               onClick={()=>{ if (!isFuture) setActive(isExpanded ? null : p.id); }}>
               <div style={{ display:"flex", alignItems:"center", gap:12 }}>
-                {/* Icon */}
                 <div style={{ width:44, height:44, borderRadius:12, background: isPast ? p.color+"22" : isActive ? p.color+"18" : c.badgeBg, border:`1px solid ${isActive||isPast ? p.color+"44" : c.cardBorder}`, display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0 }}>
                   {isPast
                     ? <Icon name="check" size={20} color={p.color} />
@@ -1444,7 +1598,6 @@ function ProtocolsScreen({ stage, weeksInStage, avgPain, onAdvanceStage }) {
                 <div style={{ flex:1, minWidth:0 }}>
                   <div style={{ fontSize:15, fontWeight:700, fontFamily:"'Outfit',sans-serif" }}>{p.title}</div>
                   <div style={{ fontSize:11, color:c.textSecondary, marginTop:1 }}>{p.weeks} · Goal: {p.goal}</div>
-                  {/* Progress bar for active stage */}
                   {isActive && (
                     <div style={{ marginTop:8 }}>
                       <div style={{ height:4, background:c.badgeBg, borderRadius:2, overflow:"hidden" }}>
@@ -1488,7 +1641,7 @@ function ProtocolsScreen({ stage, weeksInStage, avgPain, onAdvanceStage }) {
 // ── PROFILE / SETTINGS SCREEN ─────────────────────────────────────────────────
 function ProfileScreen({ stage, weeksInStage, setStage, setWeeksInStage, settings, setSettings, sessionHistory, painLog, streak, isDark, setIsDark }) {
   const c = useTheme();
-  const [settingsOpen, setSettingsOpen]     = useState(null); // "workout" | "notifications" | "medical" | "equipment"
+  const [settingsOpen, setSettingsOpen]     = useState(null);
   const [localSettings, setLocalSettings]   = useState(settings);
   const [notifs, setNotifs]                 = useState(true);
   const [morning, setMorning]               = useState(true);
@@ -1506,7 +1659,6 @@ function ProfileScreen({ stage, weeksInStage, setStage, setWeeksInStage, setting
   return (
     <div className="scroll-area fade-in" style={{ padding:"0 16px 100px" }}>
 
-      {/* Avatar + name */}
       <div style={{ display:"flex", flexDirection:"column", alignItems:"center", paddingTop:8, paddingBottom:24 }}>
         <div style={{ width:88, height:88, borderRadius:"50%", background:`linear-gradient(135deg,${c.green}33,${c.blue}22)`, border:`3px solid ${c.green}55`, display:"flex", alignItems:"center", justifyContent:"center", marginBottom:14, overflow:"hidden" }}>
           <div style={{ fontSize:32, fontWeight:900, fontFamily:"'Outfit',sans-serif", color:c.green }}>AS</div>
@@ -1515,7 +1667,6 @@ function ProfileScreen({ stage, weeksInStage, setStage, setWeeksInStage, setting
         <div style={{ fontSize:12, fontWeight:700, fontFamily:"'Outfit',sans-serif", letterSpacing:2, color:c.green }}>PHASE: {stageLabels[stage]?.toUpperCase()}</div>
       </div>
 
-      {/* Streak card */}
       <div className="card" style={{ background:c.streakBg, border:`1px solid ${c.green}33`, marginBottom:12, position:"relative", overflow:"hidden" }}>
         <div style={{ position:"absolute", bottom:-20, right:-10, opacity:0.06 }}><Icon name="fire" size={100} color={c.green} /></div>
         <div style={{ fontSize:9, fontWeight:700, fontFamily:"'Outfit',sans-serif", letterSpacing:3, color:c.green, marginBottom:6 }}>DAILY STREAK</div>
@@ -1527,7 +1678,6 @@ function ProfileScreen({ stage, weeksInStage, setStage, setWeeksInStage, setting
         </div>
       </div>
 
-      {/* Stats row */}
       <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10, marginBottom:12 }}>
         {[{ label:"WORKOUTS", value:sessionHistory.length, color:c.textPrimary },
           { label:"COLLAGEN DAYS", value:collagenDays, color:c.textPrimary }].map((s,i)=>(
@@ -1538,7 +1688,6 @@ function ProfileScreen({ stage, weeksInStage, setStage, setWeeksInStage, setting
         ))}
       </div>
 
-      {/* Recovery Stage */}
       <div className="card" style={{ marginBottom:12 }}>
         <div style={{ fontSize:14, fontWeight:700, fontFamily:"'Outfit',sans-serif", marginBottom:12 }}>Recovery Stage</div>
         <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr 1fr", gap:8, marginBottom:14 }}>
@@ -1556,7 +1705,6 @@ function ProfileScreen({ stage, weeksInStage, setStage, setWeeksInStage, setting
         </div>
       </div>
 
-      {/* Workout settings (inline) */}
       <div className="card" style={{ marginBottom:12 }}>
         <div onClick={()=>setSettingsOpen(settingsOpen==="workout"?null:"workout")} style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:settingsOpen==="workout"?16:0, cursor:"pointer" }}>
           <div style={{ display:"flex", alignItems:"center", gap:10 }}>
@@ -1587,11 +1735,9 @@ function ProfileScreen({ stage, weeksInStage, setStage, setWeeksInStage, setting
         )}
       </div>
 
-      {/* Settings list rows */}
       <div style={{ fontSize:9, fontWeight:700, fontFamily:"'Outfit',sans-serif", letterSpacing:3, color:c.textSecondary, marginBottom:8, paddingLeft:4 }}>SETTINGS</div>
       <div className="card" style={{ padding:0, overflow:"hidden", marginBottom:12 }}>
 
-        {/* Notification Preferences */}
         <div onClick={()=>setSettingsOpen(settingsOpen==="notifications"?null:"notifications")} style={{ display:"flex", alignItems:"center", gap:12, padding:"14px 16px", borderBottom:`1px solid ${c.cardBorder}`, cursor:"pointer" }}>
           <Icon name="bell" size={18} color={c.textSecondary} />
           <span style={{ flex:1, fontSize:14, fontWeight:500 }}>Notification Preferences</span>
@@ -1611,7 +1757,6 @@ function ProfileScreen({ stage, weeksInStage, setStage, setWeeksInStage, setting
           </div>
         )}
 
-        {/* Medical Disclaimer */}
         <div onClick={()=>setSettingsOpen(settingsOpen==="medical"?null:"medical")} style={{ display:"flex", alignItems:"center", gap:12, padding:"14px 16px", borderBottom:`1px solid ${c.cardBorder}`, cursor:"pointer" }}>
           <Icon name="warn" size={18} color={c.textSecondary} />
           <span style={{ flex:1, fontSize:14, fontWeight:500 }}>Medical Disclaimer</span>
@@ -1625,7 +1770,6 @@ function ProfileScreen({ stage, weeksInStage, setStage, setWeeksInStage, setting
           </div>
         )}
 
-        {/* Weight & Equipment */}
         <div onClick={()=>setSettingsOpen(settingsOpen==="equipment"?null:"equipment")} style={{ display:"flex", alignItems:"center", gap:12, padding:"14px 16px", cursor:"pointer" }}>
           <Icon name="workout" size={18} color={c.textSecondary} />
           <span style={{ flex:1, fontSize:14, fontWeight:500 }}>Weight &amp; Equipment</span>
@@ -1640,7 +1784,6 @@ function ProfileScreen({ stage, weeksInStage, setStage, setWeeksInStage, setting
         )}
       </div>
 
-      {/* Theme toggle row */}
       <div style={{ fontSize:9, fontWeight:700, fontFamily:"'Outfit',sans-serif", letterSpacing:3, color:c.textSecondary, marginBottom:8, paddingLeft:4 }}>APPEARANCE</div>
       <div className="card" style={{ padding:"14px 16px", marginBottom:12 }}>
         <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between" }}>
@@ -1656,7 +1799,6 @@ function ProfileScreen({ stage, weeksInStage, setStage, setWeeksInStage, setting
         </div>
       </div>
 
-      {/* Sign out */}
       <button style={{ width:"100%", background:c.red+"12", border:`1.5px solid ${c.red}44`, borderRadius:14, padding:"15px", fontSize:14, fontWeight:700, fontFamily:"'Outfit',sans-serif", color:c.red, cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center", gap:8 }}>
         <Icon name="exit" size={16} color={c.red} />
         Sign Out
@@ -1669,13 +1811,12 @@ function ProfileScreen({ stage, weeksInStage, setStage, setWeeksInStage, setting
 export default function App() {
   const [activeTab, setActiveTab]       = useState("today");
   const [workoutActive, setWorkoutActive] = useState(false);
+  const [timersActive, setTimersActive] = useState(false);
   const [isDark, setIsDark]             = useLocalStorage("ryk_darkMode", true);
 
   const c = isDark ? THEMES.dark : THEMES.light;
-  // Keep module-level alias in sync so any stray references still work
   colors = c;
 
-  // ── Persisted state ──
   const [painLog, setPainLog]           = useLocalStorage("ryk_painLog", []);
   const [sessionHistory, setSessionHistory] = useLocalStorage("ryk_sessions", []);
   const [stage, setStage]               = useLocalStorage("ryk_stage", "A");
@@ -1691,7 +1832,6 @@ export default function App() {
     ? parseFloat((painLog.slice(-7).reduce((a,b) => a + b.value, 0) / Math.min(painLog.length, 7)).toFixed(1))
     : 0;
 
-  // ── Full-screen warning state ──
   const recentPainVals = painLog.slice(-3).map(p => p.value);
   const painSpikeDetected = recentPainVals.length === 3
     && recentPainVals.every((v,i) => i===0 || v >= recentPainVals[i-1])
@@ -1739,7 +1879,7 @@ export default function App() {
         </div>
 
         <div style={{ flex:1, overflow:"hidden" }}>
-          {activeTab==="today"     && <TodayScreen painLog={painLog} setPainLog={setPainLog} sessionHistory={sessionHistory} streak={streak} onStartWorkout={()=>setWorkoutActive(true)} settings={settings} stage={stage} />}
+          {activeTab==="today"     && <TodayScreen painLog={painLog} setPainLog={setPainLog} sessionHistory={sessionHistory} streak={streak} onStartWorkout={()=>setWorkoutActive(true)} settings={settings} stage={stage} onStartTimers={()=>setTimersActive(true)} />}
           {activeTab==="trends"    && <TrendsScreen painLog={painLog} sessionHistory={sessionHistory} onExport={handleExport} />}
           {activeTab==="protocols" && <ProtocolsScreen stage={stage} weeksInStage={weeksElapsed} avgPain={avgPain} onAdvanceStage={handleAdvanceStage} />}
           {activeTab==="profile"   && <ProfileScreen stage={stage} weeksInStage={weeksElapsed} setStage={handleSetStage} setWeeksInStage={setWeeksInStage} settings={settings} setSettings={setSettings} sessionHistory={sessionHistory} painLog={painLog} streak={streak} isDark={isDark} setIsDark={setIsDark} />}
@@ -1758,10 +1898,8 @@ export default function App() {
         </div>
       </div>
 
-      {/* Full-screen pain spike WARNING */}
       {showWarningScreen && (
         <div style={{ position:"fixed", inset:0, zIndex:300, background:"#0d0000", display:"flex", flexDirection:"column", maxWidth:420, margin:"0 auto", overflowY:"auto" }}>
-          {/* Back arrow */}
           <div style={{ padding:"52px 20px 0", display:"flex", alignItems:"center", gap:12 }}>
             <button onClick={handleKeepPlan} style={{ width:36, height:36, borderRadius:10, background:"#1a0000", border:"1px solid #3a0000", display:"flex", alignItems:"center", justifyContent:"center", cursor:"pointer" }}>
               <Icon name="arrow" size={18} color="#888" style={{ transform:"rotate(180deg)" }} />
@@ -1769,7 +1907,6 @@ export default function App() {
             <div style={{ fontSize:13, fontWeight:700, fontFamily:"'Outfit',sans-serif", letterSpacing:4, color:"#888" }}>REBUILD YOUR KNEE</div>
           </div>
 
-          {/* WARNING headline */}
           <div style={{ padding:"32px 24px 0", textAlign:"center" }}>
             <div style={{ fontSize:52, fontWeight:900, fontFamily:"'Outfit',sans-serif", color:"#ff2222", letterSpacing:-1, lineHeight:1, marginBottom:16 }}>WARNING</div>
             <div style={{ fontSize:11, fontWeight:700, fontFamily:"'Outfit',sans-serif", letterSpacing:4, color:"#ff6644", marginBottom:20 }}>TENDON FATIGUE DETECTED</div>
@@ -1780,9 +1917,7 @@ export default function App() {
             </p>
           </div>
 
-          {/* Recovery plan card with image */}
           <div style={{ margin:"0 20px 24px", background:"#1a0800", border:"1px solid #3a1500", borderRadius:16, overflow:"hidden" }}>
-            {/* Grayscale image placeholder — man stretching */}
             <div style={{ height:160, background:"linear-gradient(135deg,#1a1a1a 0%,#2a2a2a 100%)", display:"flex", alignItems:"center", justifyContent:"center", position:"relative", overflow:"hidden" }}>
               <div style={{ fontSize:64, opacity:0.15 }}>🧎</div>
               <div style={{ position:"absolute", inset:0, background:"linear-gradient(to bottom,transparent 60%,#1a0800 100%)" }} />
@@ -1800,7 +1935,6 @@ export default function App() {
             </div>
           </div>
 
-          {/* CTAs */}
           <div style={{ padding:"0 20px 52px", display:"flex", flexDirection:"column", gap:12 }}>
             <button onClick={handleAdjustIntensity} style={{ width:"100%", background:"#B2FF00", color:"#000", border:"none", borderRadius:50, padding:"18px", fontSize:15, fontWeight:900, fontFamily:"'Outfit',sans-serif", cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center", gap:10 }}>
               ADJUST NEXT WORKOUT (−15%)
@@ -1822,11 +1956,14 @@ export default function App() {
           stage={stage}
         />
       )}
+
+      {timersActive && (
+        <TimersScreen onClose={() => setTimersActive(false)} />
+      )}
     </ThemeContext.Provider>
   );
 }
 
-// ── useLocalStorage hook ──────────────────────────────────────────────────────
 function useLocalStorage(key, initialValue) {
   const [value, setValue] = useState(() => {
     try {
@@ -1846,7 +1983,6 @@ function useLocalStorage(key, initialValue) {
   return [value, setStored];
 }
 
-// ── Streak calculator ─────────────────────────────────────────────────────────
 function calcStreak(sessionHistory, painLog) {
   const activeDates = new Set();
   sessionHistory.forEach(s => { if (s.date) activeDates.add(s.date); });
